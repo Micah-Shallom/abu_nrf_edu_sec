@@ -21,6 +21,8 @@ import { LandingPage } from "@/components/landing/LandingPage"
 import { DashboardMain } from "@/components/dashboard/DashboardMain"
 import { VehicleRegistration } from "@/components/dashboard/VehicleRegistration"
 import { ActivityLogs } from "@/components/dashboard/ActivityLogs";
+import { Notification } from "@/components/ui/Notification"
+import { authService } from "@/services/authService"
 import {
   Shield,
   Camera,
@@ -53,6 +55,20 @@ type AppUser = {
   shift?: string
 }
 
+type BackendUser = {
+  ID?: string;  // Backend uses uppercase
+  id?: string;  // Some APIs use lowercase
+  Name?: string;
+  name?: string;
+  Email?: string;
+  email?: string;
+  Role?: string;
+  role?: string;
+  createdAt?: string;
+  token?: string;
+  // Add other backend fields if needed
+}
+
 type Vehicle = {
   id: string
   plateNumber: string
@@ -81,7 +97,9 @@ type VehicleSecuritySystemState = {
   registerForm: { name: string; email: string; password: string }
   profileForm: { name: string; email: string; phone: string; station: string; shift: string;profileImage?: string; profileImageFile?: File;}
   vehicleForm: { plateNumber: string; model: string; color: string; type: string }
-
+  loading: boolean
+  notification: {show: boolean; message: string; type: 'success' | 'error' | 'info';
+  };
   showNotification: boolean;
   notificationMessage: string;
   isEntryNotification: boolean;
@@ -95,6 +113,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       currentUser: null,
       users: [],
       vehicles: [],
+      loading: false,
       activityLogs: [
         {
           id: "1",
@@ -115,6 +134,8 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       registerForm: { name: "", email: "", password: "" },
       profileForm: { name: "", email: "", phone: "", station: "", shift: "", profileImage: "",profileImageFile: undefined },
       vehicleForm: { plateNumber: "", model: "", color: "", type: "" },
+
+      notification: {show: false, message: '', type: 'info'},
 
       showNotification: false,
       notificationMessage: "",
@@ -137,6 +158,26 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       this.setState({ showNotification: false });
     }, 30000);
   }
+
+  setNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+  this.setState({
+    notification: {
+      show: true,
+      message,
+      type
+    }
+  });
+  
+  // Auto-hide after 5 seconds
+  setTimeout(() => {
+    this.setState({
+      notification: {
+        ...this.state.notification,
+        show: false
+      }
+    });
+  }, 5000);
+  };
 
   handleNotificationResponse = (response: boolean) => {
     // This will be connected to backend later
@@ -167,15 +208,43 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
   reader.readAsDataURL(file);
   };
 
-  handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const user = this.state.users.find((u) => u.email === this.state.loginForm.email);
-    if (user) {
-      this.setState({ 
-        currentUser: user, 
-        currentPage: "dashboard" 
-      });
+  handleLogin = async (e: React.FormEvent) => {
+      e.preventDefault();
+  this.setState({ loading: true });
+  
+  try {
+    const { user, token, error } = await authService.login({
+      email: this.state.loginForm.email,
+      password: this.state.loginForm.password
+    });
+
+    if (error) {
+      this.setNotification(error, 'error');
+      return;
     }
+
+    if (user && token) {
+      const appUser: AppUser = {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        // Add other fields if available
+      };
+
+      localStorage.setItem('authToken', token);
+      this.setState({ 
+        currentUser: appUser,
+        currentPage: "dashboard"
+      });
+      
+      this.setNotification("Login successful!", 'success');
+    }
+  } catch (err) {
+    this.setNotification("An unexpected error occurred", 'error');
+  } finally {
+    this.setState({ loading: false });
+  }
   };
 
   handleRegister = (e: React.FormEvent) => {
@@ -237,7 +306,11 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
   }
 
   handleLogout = () => {
-    this.setState({ currentUser: null, currentPage: "landing", isMenuOpen: false })
+      localStorage.removeItem('authToken');
+      this.setState({ 
+        currentUser: null,
+        currentPage: "landing"
+      });
   }
 
   deleteVehicle = (vehicleId: string) => {
@@ -349,41 +422,33 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
   }
 
   renderRegisterPage() {
-    return (
-        <RegisterForm
-          name={this.state.registerForm.name}
-          email={this.state.registerForm.email}
-          password={this.state.registerForm.password}
-          onNameChange={(name) => this.setState({
-            registerForm: { ...this.state.registerForm, name }
-          })}
-          onEmailChange={(email) => this.setState({
-            registerForm: { ...this.state.registerForm, email }
-          })}
-          onPasswordChange={(password) => this.setState({
-            registerForm: { ...this.state.registerForm, password }
-          })}
-          onSubmit={this.handleRegister}
-          onNavigateToLogin={() => this.setState({ currentPage: "login" })}
-          onNavigateToHome={() => this.setState({ currentPage: "landing" })}
-      />
-    )
+  return (
+    <RegisterForm
+      onSuccess={() => {
+        this.setNotification("Registration successful! Please login.", "success");
+        this.setState({ currentPage: "login" });
+      }}
+      onNavigateToLogin={() => this.setState({ currentPage: "login" })}
+      onNavigateToHome={() => this.setState({ currentPage: "landing" })}
+    />
+  );
   }
 
   renderLoginPage() {
     return (
-        <LoginForm
-          email={this.state.loginForm.email}
-          password={this.state.loginForm.password}
-          onEmailChange={(email) => this.setState({ 
-            loginForm: { ...this.state.loginForm, email } 
-          })}
-          onPasswordChange={(password) => this.setState({ 
-            loginForm: { ...this.state.loginForm, password } 
-          })}
-          onSubmit={this.handleLogin}
-          onNavigateToRegister={() => this.setState({ currentPage: "register" })}
-          onNavigateToHome={() => this.setState({ currentPage: "landing" })}
+      <LoginForm
+        email={this.state.loginForm.email}
+        password={this.state.loginForm.password}
+        loading={this.state.loading} // Add this
+        onEmailChange={(email) => this.setState({ 
+          loginForm: { ...this.state.loginForm, email } 
+        })}
+        onPasswordChange={(password) => this.setState({ 
+          loginForm: { ...this.state.loginForm, password } 
+        })}
+        onSubmit={this.handleLogin}
+        onNavigateToRegister={() => this.setState({ currentPage: "register" })}
+        onNavigateToHome={() => this.setState({ currentPage: "landing" })}
       />
     )
   }
@@ -661,6 +726,19 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
         return this.renderVehicleRegistrationPage()
       case "activity-logs":
         return this.renderActivityLogsPage();
+      {this.state.notification.show && (
+        <Notification
+          message={this.state.notification.message}
+          type={this.state.notification.type}
+          onClose={() => this.setState({
+            notification: {
+              ...this.state.notification,
+              show: false
+            }
+          })}
+          show={this.state.notification.show}
+        />
+      )}
       default:
         return this.renderDashboard()
     }

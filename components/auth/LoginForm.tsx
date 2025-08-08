@@ -2,11 +2,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogIn } from "lucide-react";
+import { LogIn, Loader2} from "lucide-react"
 
 interface LoginFormProps {
   email: string;
   password: string;
+  loading: boolean;
   onEmailChange: (email: string) => void;
   onPasswordChange: (password: string) => void;
   onSubmit: (e: React.FormEvent) => void;
@@ -17,6 +18,7 @@ interface LoginFormProps {
 export const LoginForm = ({
   email,
   password,
+  loading,
   onEmailChange,
   onPasswordChange,
   onSubmit,
@@ -57,8 +59,22 @@ export const LoginForm = ({
                 placeholder="Enter your password"
               />
             </div>
-            <Button type="submit" className="w-full">
-              Login
+            <Button 
+              type="submit" 
+              className="w-full"
+              disabled={loading}
+            >
+              {loading ? (
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Logging in...
+                </div>
+              ) : (
+                <>
+                  <LogIn className="mr-2 h-4 w-4" />
+                  Login
+                </>
+              )}
             </Button>
             <Button
               type="button"
@@ -84,3 +100,4 @@ export const LoginForm = ({
     </div>
   );
 };
+
