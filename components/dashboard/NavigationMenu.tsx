@@ -87,10 +87,10 @@ export const NavigationMenu = ({
         </>
       )}
       <Button
-        variant={currentPage === "profile-setup" ? "default" : "ghost"}
+        variant={currentPage === "profile" ? "default" : "ghost"} // Changed from "profile-setup" to "profile"
         className="w-full justify-start"
-        onClick={() => onPageChange("profile-setup")}
-      >
+        onClick={() => onPageChange("profile")} // Changed to "profile"
+        >
         <User className="mr-2 h-4 w-4" />
         Profile
       </Button>

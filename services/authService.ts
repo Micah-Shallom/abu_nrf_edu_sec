@@ -1,5 +1,5 @@
 // /services/authService.ts
-import { User, RegisterData, LoginData } from '@/types/auth';
+import { User, RegisterData, LoginData, Profile } from '@/types/auth';
 
 const API_BASE_URL = 'https://surveilx-backend.onrender.com/api/v1';
 
@@ -133,6 +133,93 @@ export const authService = {
       };
     } catch (error) {
       return { error: 'Network error' };
+    }
+  }
+};
+
+
+export const profileService = {
+  async getProfile(token: string, userId: string): Promise<{ profile?: Profile; error?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/profile/`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { error: errorData.message || 'Failed to fetch profile' };
+      }
+
+      const profileData = await response.json();
+      return { 
+        profile: {
+          profile_id: profileData.data.profile_id,
+          full_name: profileData.data.full_name,
+          username: profileData.data.username,
+          phone: profileData.data.phone,
+          user_id: profileData.data.user_id,
+          created_at: profileData.data.created_at,
+          updated_at: profileData.data.updated_at
+        }
+      };
+
+    } catch (error) {
+      return { 
+        error: error instanceof Error ? error.message : 'Network error' 
+      };
+    }
+  },
+
+  async updateProfile(
+    token: string,
+    userId: string,
+    updateData: {
+      full_name?: string;
+      phone?: string;
+    }
+  ): Promise<{ profile?: Profile; error?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/profile/`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...updateData,
+          user_id: userId
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { error: errorData.message || 'Profile update failed' };
+      }
+
+      const responseData = await response.json();
+      
+      // Handle both possible response structures
+      const profileData = responseData.data || responseData;
+      
+      return { 
+        profile: {
+          profile_id: profileData.profile_id || '',
+          full_name: profileData.full_name || '',
+          username: profileData.username || '',
+          phone: profileData.phone || '',
+          user_id: profileData.user_id || userId,
+          created_at: profileData.created_at || new Date().toISOString(),
+          updated_at: profileData.updated_at || new Date().toISOString()
+        }
+      };
+    } catch (error) {
+      console.error('Profile update error:', error);
+      return { 
+        error: error instanceof Error ? error.message : 'Network error' 
+      };
     }
   }
 };

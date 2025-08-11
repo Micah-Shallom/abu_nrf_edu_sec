@@ -15,14 +15,17 @@ import Link from "next/link"
 import Image from "next/image"
 import { LoginForm } from "@/components/auth/LoginForm"
 import { RegisterForm } from "@/components/auth/RegisterForm"
-import { ProfileSetup } from "@/components/dashboard/ProfileSetup"
+import { ProfileEdit } from "@/components/dashboard/ProfileEdit"
 import { NavigationMenu } from "@/components/dashboard/NavigationMenu"
 import { LandingPage } from "@/components/landing/LandingPage"
 import { DashboardMain } from "@/components/dashboard/DashboardMain"
 import { VehicleRegistration } from "@/components/dashboard/VehicleRegistration"
 import { ActivityLogs } from "@/components/dashboard/ActivityLogs";
 import { Notification } from "@/components/ui/Notification"
-import { authService } from "@/services/authService"
+import { authService, profileService } from "@/services/authService"
+import { ProfileContainer } from "@/components/dashboard/ProfileContainer"
+import { ProfileView } from "@/components/dashboard/ProfileView"
+import { User } from "lucide-react"
 import {
   Shield,
   Camera,
@@ -50,9 +53,6 @@ type AppUser = {
   email: string
   role: "User" | "Security"
   phone?: string;
-  profileImage?: string;
-  station?: string
-  shift?: string
 }
 
 type BackendUser = {
@@ -95,7 +95,7 @@ type VehicleSecuritySystemState = {
   isMenuOpen: boolean
   loginForm: { email: string; password: string }
   registerForm: { name: string; email: string; password: string }
-  profileForm: { name: string; email: string; phone: string; station: string; shift: string;profileImage?: string; profileImageFile?: File;}
+  profileForm: { name: string; email: string; phone: string;}
   vehicleForm: { plateNumber: string; model: string; color: string; type: string }
   loading: boolean
   notification: {show: boolean; message: string; type: 'success' | 'error' | 'info';
@@ -103,6 +103,7 @@ type VehicleSecuritySystemState = {
   showNotification: boolean;
   notificationMessage: string;
   isEntryNotification: boolean;
+  profileLoading: boolean;
 }
 
 export default class VehicleSecuritySystem extends Component<{}, VehicleSecuritySystemState> {
@@ -114,6 +115,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       users: [],
       vehicles: [],
       loading: false,
+      profileLoading: false,
       activityLogs: [
         {
           id: "1",
@@ -132,7 +134,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       isMenuOpen: false,
       loginForm: { email: "", password: "" },
       registerForm: { name: "", email: "", password: "" },
-      profileForm: { name: "", email: "", phone: "", station: "", shift: "", profileImage: "",profileImageFile: undefined },
+      profileForm: { name: "", email: "", phone: ""},
       vehicleForm: { plateNumber: "", model: "", color: "", type: "" },
 
       notification: {show: false, message: '', type: 'info'},
@@ -189,24 +191,20 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
   componentDidMount() {
     // Simulate entry notification after 5 seconds
     setTimeout(() => this.toggleNotification(true), 5000);
-    
     // Simulate exit notification after 20 seconds
     setTimeout(() => this.toggleNotification(false), 20000);
   }
 
-  handleProfileImageChange = (file: File) => {
-  const reader = new FileReader();
-  reader.onload = () => {
-    this.setState({
-      profileForm: {
-        ...this.state.profileForm,
-        profileImage: reader.result as string,
-        profileImageFile: file
-      }
-    });
-  };
-  reader.readAsDataURL(file);
-  };
+  componentDidUpdate(prevProps: {}, prevState: VehicleSecuritySystemState) {
+    // Only fetch profile if user changed and we have a current user
+    if (this.state.currentUser && 
+        (!prevState.currentUser || 
+        prevState.currentUser.id !== this.state.currentUser.id)) {
+      this.fetchProfile();
+    }
+  }
+
+
 
   handleLogin = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -258,31 +256,49 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
     this.setState({
       users: [...this.state.users, newUser],
       currentUser: newUser,
-      currentPage: "profile-setup",
+      currentPage: "profile",
     })
   }
 
-  handleProfileSetup = (e: React.FormEvent) => {
+handleProfileSetup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (this.state.currentUser) {
-      const updatedUser = {
-        ...this.state.currentUser,
-        name: this.state.profileForm.name || this.state.currentUser.name,
-        email: this.state.profileForm.email || this.state.currentUser.email,
-        phone: this.state.profileForm.phone,
-        ...(this.state.currentUser.role === "Security" && {
-          station: this.state.profileForm.station,
-          shift: this.state.profileForm.shift,
-        }),
-        // In a real app, you would upload the image file to your server here
-        // and store the URL in the user object
-        profileImage: this.state.profileForm.profileImage
-      };
-      this.setState({
-        currentUser: updatedUser,
-        users: this.state.users.map((u) => (u.id === updatedUser.id ? updatedUser : u)),
-        currentPage: "dashboard",
-      });
+    const token = localStorage.getItem('authToken');
+    if (!token || !this.state.currentUser) return;
+
+    this.setState({ loading: true });
+
+    try {
+      const { profile, error } = await profileService.updateProfile(
+        token,
+        this.state.currentUser.id,
+        {
+          full_name: this.state.profileForm.name,
+          phone: this.state.profileForm.phone
+        }
+      );
+
+      if (error) throw new Error(error);
+
+      if (profile) {
+        this.setNotification("Profile updated successfully!", 'success');
+        this.setState({
+          currentUser: {
+            ...this.state.currentUser,
+            name: profile.full_name || this.state.currentUser.name
+          },
+          profileForm: {
+            ...this.state.profileForm,
+            name: profile.full_name || this.state.profileForm.name,
+            phone: profile.phone || this.state.profileForm.phone
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Profile update error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Profile update failed';
+      this.setNotification(errorMessage, 'error');
+    } finally {
+      this.setState({ loading: false });
     }
   };
 
@@ -306,17 +322,54 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
   }
 
   handleLogout = () => {
-      localStorage.removeItem('authToken');
-      this.setState({ 
-        currentUser: null,
-        currentPage: "landing"
-      });
+    localStorage.removeItem('authToken');
+    this.setState({ 
+      currentUser: null,
+      currentPage: "landing",
+      profileForm: {  // Reset profile form
+        name: "",
+        email: "",
+        phone: "",
+      }
+    });
   }
 
   deleteVehicle = (vehicleId: string) => {
     this.setState({ vehicles: this.state.vehicles.filter((v) => v.id !== vehicleId) })
   }
 
+  async fetchProfile() {
+    const token = localStorage.getItem('authToken');
+    if (!token || !this.state.currentUser) return;
+
+    this.setState({ profileLoading: true });
+    
+    try {
+      const { profile, error } = await profileService.getProfile(
+        token,
+        this.state.currentUser.id
+      );
+      
+      if (error) throw new Error(error);
+
+      if (profile) {
+        this.setState({
+          profileForm: {
+            name: profile.full_name || this.state.currentUser.name,
+            email: profile.email || this.state.currentUser.email,
+            phone: profile.phone || ''
+          }
+        });
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load profile';
+      this.setNotification(errorMessage, 'error');
+    } finally {
+      this.setState({ profileLoading: false });
+    }
+  }
+
+  
   NavigationMenu = () => {
     const userVehicles = this.state.vehicles.filter((v) => v.userId === this.state.currentUser?.id)
     
@@ -391,13 +444,13 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
           </>
         )}
         <Button
-          variant={this.state.currentPage === "profile-setup" ? "default" : "ghost"}
+          variant={this.state.currentPage === "profile" ? "default" : "ghost"}
           className="w-full justify-start"
           onClick={() => {
-            this.setState({ currentPage: "profile-setup", isMenuOpen: false })
+            this.setState({ currentPage: "profile", isMenuOpen: false }) // Changed to "profile"
           }}
-        >
-          <Car className="mr-2 h-4 w-4" />
+          >
+          <User className="mr-2 h-4 w-4" />
           Profile
         </Button>
         <Button
@@ -453,55 +506,77 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
     )
   }
 
-  renderProfileSetupPage() {
-  if (!this.state.currentUser) return null;
+  renderProfilePage() {
+    if (!this.state.currentUser) return null;
 
-    return (
-      <ProfileSetup
-        currentUser={this.state.currentUser}
-        formData={this.state.profileForm}
-        onNameChange={(name) => this.setState({
-          profileForm: { ...this.state.profileForm, name }
-        })}
-        onEmailChange={(email) => this.setState({
-          profileForm: { ...this.state.profileForm, email }
-        })}
-        onPhoneChange={(phone) => this.setState({
-          profileForm: { ...this.state.profileForm, phone }
-        })}
-        onStationChange={(station) => this.setState({
-          profileForm: { ...this.state.profileForm, station }
-        })}
-        onShiftChange={(shift) => this.setState({
-          profileForm: { ...this.state.profileForm, shift }
-        })}
-        onProfileImageChange={this.handleProfileImageChange}
-        onSubmit={this.handleProfileSetup}
-        onLogout={this.handleLogout}
-      />
-    )
-  }
+     return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center">
+                {this.state.currentUser.role === "Security" ? (
+                  <Shield className="h-8 w-8 text-blue-600 mr-3" />
+                ) : (
+                  <User className="h-8 w-8 text-blue-600 mr-3" />
+                )}
+                <h1 className="text-xl font-semibold">My Profile</h1>
+              </div>
+              <Button 
+                variant="ghost" 
+                onClick={() => this.setState({ currentPage: "dashboard" })}
+              >
+                Back to Dashboard
+              </Button>
+            </div>
+          </div>
+        </header>
 
-  renderVehicleRegistrationPage() {
-  return (
-    <VehicleRegistration
-      formData={this.state.vehicleForm}
-      onPlateNumberChange={(plateNumber) => 
-        this.setState({ vehicleForm: { ...this.state.vehicleForm, plateNumber } })
-      }
-      onModelChange={(model) => 
-        this.setState({ vehicleForm: { ...this.state.vehicleForm, model } })
-      }
-      onColorChange={(color) => 
-        this.setState({ vehicleForm: { ...this.state.vehicleForm, color } })
-      }
-      onTypeChange={(type) => 
-        this.setState({ vehicleForm: { ...this.state.vehicleForm, type } })
-      }
-      onSubmit={this.handleVehicleRegistration}
-      onCancel={() => this.setState({ currentPage: "dashboard" })}
-    />
-  );
+        <main className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+          <ProfileContainer
+              currentUser={this.state.currentUser}
+              initialData={{
+                full_name: this.state.profileForm.name,
+                phone: this.state.profileForm.phone
+              }}
+              onSave={async (data) => {
+                this.setState({ profileLoading: true });
+                try {
+                  const token = localStorage.getItem('authToken');
+                  if (!token || !this.state.currentUser) throw new Error('Not authenticated');
+                  
+                  const { profile, error } = await profileService.updateProfile(
+                    token,
+                    this.state.currentUser.id,
+                    {
+                      full_name: data.full_name,
+                      phone: data.phone
+                    }
+                  );
+
+                  if (error) throw new Error(error);
+                  
+                  this.setState({
+                    profileForm: {
+                      ...this.state.profileForm,
+                      name: profile?.full_name || data.full_name,
+                      phone: profile?.phone || data.phone
+                    }
+                  });
+                  
+                  this.setNotification("Profile updated successfully!", 'success');
+                } catch (err) {
+                  const errorMessage = err instanceof Error ? err.message : 'Profile update failed';
+                  this.setNotification(errorMessage, 'error');
+                } finally {
+                  this.setState({ profileLoading: false });
+                }
+              }}
+              loading={this.state.profileLoading}
+            />
+        </main>
+      </div>
+    );
   }
 
  renderActivityLogsPage(){
@@ -633,6 +708,28 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
   );
   }
 
+  renderVehicleRegistrationPage() {
+    return (
+      <VehicleRegistration
+        formData={this.state.vehicleForm}
+        onPlateNumberChange={(plateNumber) => 
+          this.setState({ vehicleForm: {...this.state.vehicleForm, plateNumber} })
+        }
+        onModelChange={(model) => 
+          this.setState({ vehicleForm: {...this.state.vehicleForm, model} })
+        }
+        onColorChange={(color) => 
+          this.setState({ vehicleForm: {...this.state.vehicleForm, color} })
+        }
+        onTypeChange={(type) => 
+          this.setState({ vehicleForm: {...this.state.vehicleForm, type} })
+        }
+        onSubmit={this.handleVehicleRegistration}
+        onCancel={() => this.setState({ currentPage: "dashboard" })}
+      />
+    );
+  }
+
   renderDashboard() {
     const userVehicles = this.state.vehicles.filter((v) => v.userId === this.state.currentUser?.id)
 
@@ -701,7 +798,6 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
                 userVehiclesCount={this.state.vehicles.filter(v => v.userId === this.state.currentUser?.id).length}
                 activeSessionsCount={this.state.activityLogs.filter(log => !log.exitTime).length}
                 totalVehiclesCount={this.state.vehicles.length}
-                userStation={this.state.currentUser?.station} // Safe optional chaining
                 onNavigate={(page) => this.setState({ currentPage: page })}
               />
             </main>
@@ -720,8 +816,8 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
         return this.renderRegisterPage()
       case "login":
         return this.renderLoginPage()
-      case "profile-setup":
-        return this.renderProfileSetupPage()
+      case "profile":
+        return this.renderProfilePage()
       case "vehicle-registration":
         return this.renderVehicleRegistrationPage()
       case "activity-logs":

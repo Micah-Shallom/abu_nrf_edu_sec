@@ -138,13 +138,6 @@ export const DashboardMain = ({
               <Plus className="h-5 w-5 text-blue-600" />
               <span>Register New Vehicle</span>
             </button>
-            <button 
-              onClick={() => onNavigate("profile-setup")}
-              className="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100 transition-colors text-left"
-            >
-              <User className="h-5 w-5 text-green-600" />
-              <span>Update Profile</span>
-            </button>
           </CardContent>
         </Card>
       </div>

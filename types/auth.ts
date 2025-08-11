@@ -35,3 +35,19 @@ export interface AuthResponse {
   user?: User;
   error?: string;
 }
+
+export interface Profile {
+  profile_id: string;
+  full_name: string;  // Changed from Full_name to full_name
+  username: string;
+  phone: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+  email?: string;
+}
+
+export interface UpdateProfileData {
+  Full_name?: string;
+  Phone?: string;
+}
