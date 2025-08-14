@@ -57,6 +57,22 @@ export const DashboardMain = ({
 
             <Card
               className="hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => onNavigate("registered-vehicles")}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">View All Vehicles</CardTitle>
+                <Car className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{userVehiclesCount}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Tap to view all your vehicles
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card
+              className="hover:shadow-md transition-shadow cursor-pointer"
               onClick={() => onNavigate("activity-logs")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -137,6 +153,13 @@ export const DashboardMain = ({
             >
               <Plus className="h-5 w-5 text-blue-600" />
               <span>Register New Vehicle</span>
+            </button>
+            <button 
+              onClick={() => onNavigate("registered-vehicles")}
+              className="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100 transition-colors text-left"
+            >
+              <Car className="h-5 w-5 text-blue-600" />
+              <span>View My Vehicles</span>
             </button>
           </CardContent>
         </Card>

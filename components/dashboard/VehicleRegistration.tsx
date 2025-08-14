@@ -30,12 +30,9 @@ export const VehicleRegistration = ({
   onCancel,
 }: VehicleRegistrationProps) => {
   const vehicleTypes = [
-    "Sedan",
-    "SUV",
-    "Hatchback",
-    "Truck",
-    "Motorcycle",
-    "Other"
+  { value: 'bus', label: 'Bus' },
+  { value: 'car', label: 'Car' },
+  { value: 'bike', label: 'Bike' }
   ];
 
   return (
@@ -104,8 +101,8 @@ export const VehicleRegistration = ({
                     </SelectTrigger>
                     <SelectContent>
                       {vehicleTypes.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
+                        <SelectItem key={type.value} value={type.value}>
+                          {type.label}
                         </SelectItem>
                       ))}
                     </SelectContent>

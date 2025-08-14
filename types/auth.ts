@@ -51,3 +51,18 @@ export interface UpdateProfileData {
   Full_name?: string;
   Phone?: string;
 }
+
+export interface Vehicle {
+  id: string;
+  plate_number: string;  // Matches API response
+  model: string;
+  color: string;
+  type: 'bus' | 'car' | 'bike';
+  status?: 'Active' | 'Inactive';
+  user_id?: string;      // Matches API response
+  
+  // Frontend convenience properties
+  plateNumber?: string;  // Optional frontend alias
+  userId?: string;       // Optional frontend alias
+  createdAt?: string;    // Optional for frontend display
+}

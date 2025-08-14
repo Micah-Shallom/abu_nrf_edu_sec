@@ -26,6 +26,8 @@ import { authService, profileService } from "@/services/authService"
 import { ProfileContainer } from "@/components/dashboard/ProfileContainer"
 import { ProfileView } from "@/components/dashboard/ProfileView"
 import { User } from "lucide-react"
+import { RegisteredVehicles } from "@/components/dashboard/RegisteredVehicles"
+import { vehicleService } from "@/services/vehicleService"  
 import {
   Shield,
   Camera,
@@ -69,13 +71,17 @@ type BackendUser = {
   // Add other backend fields if needed
 }
 
+
 type Vehicle = {
-  id: string
-  plateNumber: string
-  model: string
-  color: string
-  type: string
-  userId: string
+  id: string;
+  plateNumber: string;    // Frontend primary field
+  plate_number?: string;  // Optional API field
+  model: string;
+  color: string;
+  type: string;
+  status: "Active" | "Inactive";
+  userId: string;
+  user_id?: string;      // Optional API field
 }
 
 type ActivityLog = {
@@ -187,12 +193,23 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
     this.setState({ showNotification: false });
   }
 
+  isPlateNumberTaken = (plateNumber: string): boolean => {
+    return this.state.vehicles.some(v => 
+      v.plateNumber.toLowerCase() === plateNumber.toLowerCase() ||
+      v.plate_number?.toLowerCase() === plateNumber.toLowerCase()
+    );
+  };
+  
   // Add this in componentDidMount to simulate notifications:
   componentDidMount() {
     // Simulate entry notification after 5 seconds
     setTimeout(() => this.toggleNotification(true), 5000);
     // Simulate exit notification after 20 seconds
     setTimeout(() => this.toggleNotification(false), 20000);
+
+    if (this.state.currentUser) {
+      this.fetchVehicles();
+    } 
   }
 
   componentDidUpdate(prevProps: {}, prevState: VehicleSecuritySystemState) {
@@ -202,47 +219,58 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
         prevState.currentUser.id !== this.state.currentUser.id)) {
       this.fetchProfile();
     }
+    if ((!prevState.currentUser && this.state.                currentUser) ||
+        (prevState.currentPage !== 'registered-vehicles' && 
+        this.state.currentPage === 'registered-vehicles')) {
+      this.fetchVehicles();
+    }
   }
 
 
 
   handleLogin = async (e: React.FormEvent) => {
-      e.preventDefault();
-  this.setState({ loading: true });
-  
-  try {
-    const { user, token, error } = await authService.login({
-      email: this.state.loginForm.email,
-      password: this.state.loginForm.password
-    });
-
-    if (error) {
-      this.setNotification(error, 'error');
-      return;
-    }
-
-    if (user && token) {
-      const appUser: AppUser = {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        // Add other fields if available
-      };
-
-      localStorage.setItem('authToken', token);
-      this.setState({ 
-        currentUser: appUser,
-        currentPage: "dashboard"
+    e.preventDefault();
+    this.setState({ loading: true });
+    
+    try {
+      const { user, token, error } = await authService.login({
+        email: this.state.loginForm.email,
+        password: this.state.loginForm.password
       });
-      
-      this.setNotification("Login successful!", 'success');
+
+      if (error) {
+        this.setNotification(error, 'error');
+        return;
+      }
+
+      if (user && token) {
+        const appUser: AppUser = {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        };
+
+        localStorage.setItem('authToken', token);
+        
+        // First set the user state
+        await new Promise<void>((resolve) => {
+          this.setState({ 
+            currentUser: appUser,
+            currentPage: "dashboard"
+          }, resolve); // Using callback to ensure state is updated
+        });
+        
+        // Then fetch vehicles
+        await this.fetchVehicles();
+        
+        this.setNotification("Login successful!", 'success');
+      }
+    } catch (err) {
+      this.setNotification("An unexpected error occurred", 'error');
+    } finally {
+      this.setState({ loading: false });
     }
-  } catch (err) {
-    this.setNotification("An unexpected error occurred", 'error');
-  } finally {
-    this.setState({ loading: false });
-  }
   };
 
   handleRegister = (e: React.FormEvent) => {
@@ -260,7 +288,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
     })
   }
 
-handleProfileSetup = async (e: React.FormEvent) => {
+  handleProfileSetup = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem('authToken');
     if (!token || !this.state.currentUser) return;
@@ -302,24 +330,81 @@ handleProfileSetup = async (e: React.FormEvent) => {
     }
   };
 
-  handleVehicleRegistration = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (this.state.currentUser) {
-      const newVehicle: Vehicle = {
-        id: Date.now().toString(),
-        plateNumber: this.state.vehicleForm.plateNumber,
-        model: this.state.vehicleForm.model,
-        color: this.state.vehicleForm.color,
-        type: this.state.vehicleForm.type,
-        userId: this.state.currentUser.id,
-      }
-      this.setState({
-        vehicles: [...this.state.vehicles, newVehicle],
-        vehicleForm: { plateNumber: "", model: "", color: "", type: "" },
-        currentPage: "registered-vehicles",
-      })
+  handleVehicleRegistration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // Client-side duplicate check
+    if (this.isPlateNumberTaken(this.state.vehicleForm.plateNumber)) {
+      this.setNotification('This plate number is already registered', 'error');
+      return;
     }
-  }
+    
+    const token = localStorage.getItem('authToken');
+    if (!token || !this.state.currentUser) {
+      this.setNotification('Please login first', 'error');
+      return;
+    }
+
+    console.log('Submitting vehicle:', this.state.vehicleForm); // Debug log
+
+
+    this.setState({ loading: true });
+
+    try {
+      const { vehicle, error } = await vehicleService.registerVehicle(
+        token,
+        {
+          plate_number: this.state.vehicleForm.plateNumber,
+          model: this.state.vehicleForm.model,
+          color: this.state.vehicleForm.color,
+          type: this.state.vehicleForm.type.toLowerCase() as 'bus' | 'car' | 'bike'
+        }
+      );
+
+      console.log('API Response:', { vehicle, error }); // Debug log
+
+      
+      if (error) {
+        // Show the specific error message from the API
+        this.setNotification(error, 'error');
+        return;
+      }
+
+
+      if (vehicle) {
+        this.setState({
+          vehicles: [...this.state.vehicles, {
+            ...vehicle,
+            plateNumber: vehicle.plate_number, // Ensure frontend compatibility
+            userId: this.state.currentUser?.id || '',
+            status: 'Active'
+          }],
+          vehicleForm: { plateNumber: "", model: "", color: "", type: "" },
+          currentPage: "registered-vehicles"
+        });
+        this.setNotification("Vehicle registered successfully!", 'success');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Vehicle registration failed';
+      this.setNotification(errorMessage, 'error');
+    } finally {
+      this.setState({ loading: false });
+    }
+  };
+
+  handleEditVehicle = (vehicleId: string) => {
+    const vehicle = this.state.vehicles.find(v => v.id === vehicleId);
+    if (vehicle) {
+      this.setState({
+        currentPage: "vehicle-registration",
+        vehicleForm: {
+          plateNumber: vehicle.plateNumber,
+          model: vehicle.model,
+          color: vehicle.color,
+          type: vehicle.type
+        }
+      });
+    }
+  };
 
   handleLogout = () => {
     localStorage.removeItem('authToken');
@@ -368,6 +453,42 @@ handleProfileSetup = async (e: React.FormEvent) => {
       this.setState({ profileLoading: false });
     }
   }
+
+  fetchVehicles = async () => {
+    const token = localStorage.getItem('authToken');
+    if (!token || !this.state.currentUser) {
+      console.error('Cannot fetch vehicles - no token or user');
+      return;
+    }
+
+    this.setState({ loading: true });
+
+    try {
+      const { vehicles, error } = await vehicleService.getVehicles(token);
+      
+      if (error) {
+        this.setNotification(error, 'error');
+        return;
+      }
+
+      if (vehicles) {
+        this.setState({ 
+          vehicles: vehicles.map(v => ({
+            ...v,
+            plateNumber: v.plate_number || v.plateNumber || '',
+            userId: this.state.currentUser?.id || '',
+            status: v.status || 'Active'
+          }))
+        });
+      }
+    } catch (err) {
+      console.error('Fetch vehicles error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load vehicles';
+      this.setNotification(errorMessage, 'error');
+    } finally {
+      this.setState({ loading: false });
+    }
+  };
 
   
   NavigationMenu = () => {
@@ -575,6 +696,71 @@ handleProfileSetup = async (e: React.FormEvent) => {
               loading={this.state.profileLoading}
             />
         </main>
+      </div>
+    );
+  }
+
+  renderRegisteredVehiclesPage() {
+    if (!this.state.currentUser) return null;
+
+    const userVehicles = this.state.vehicles.filter(
+      v => v.userId === this.state.currentUser?.id
+    );
+
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center">
+                {this.state.currentUser.role === "Security" ? (
+                  <Shield className="h-8 w-8 text-blue-600 mr-3" />
+                ) : (
+                  <User className="h-8 w-8 text-blue-600 mr-3" />
+                )}
+                <h1 className="text-xl font-semibold">My Profile</h1>
+              </div>
+              <Button 
+                variant="ghost" 
+                onClick={() => this.setState({ currentPage: "dashboard" })}
+              >
+                Back to Dashboard
+              </Button>
+            </div>
+          </div>
+        </header>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex gap-8">
+            <aside className="hidden lg:block w-64 flex-shrink-0">
+              <div className="bg-white rounded-lg shadow p-6">
+                <this.NavigationMenu />
+              </div>
+            </aside>
+
+            <main className="flex-1">
+                {this.state.loading ? (
+                <div className="flex justify-center items-center h-64">
+                  <p>Loading vehicles...</p>
+                </div>
+              ) : (
+                <RegisteredVehicles
+                  vehicles={this.state.vehicles.filter(v => v.userId === this.state.currentUser?.id)}
+                  onEdit={this.handleEditVehicle}
+                  onDelete={this.deleteVehicle}
+                  onRegisterNew={() => this.setState({ 
+                    currentPage: "vehicle-registration",
+                    vehicleForm: {
+                      plateNumber: "",
+                      model: "",
+                      color: "",
+                      type: ""
+                    }
+                  })}
+                />
+              )}
+            </main>
+          </div>
+        </div>
       </div>
     );
   }
@@ -822,6 +1008,8 @@ handleProfileSetup = async (e: React.FormEvent) => {
         return this.renderVehicleRegistrationPage()
       case "activity-logs":
         return this.renderActivityLogsPage();
+      case "registered-vehicles":
+        return this.renderRegisteredVehiclesPage();
       {this.state.notification.show && (
         <Notification
           message={this.state.notification.message}

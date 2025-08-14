@@ -52,7 +52,7 @@ export const NavigationMenu = ({
             variant={currentPage === "registered-vehicles" ? "default" : "ghost"}
             className="w-full justify-start"
             onClick={() => onPageChange("registered-vehicles")}
-          >
+            >
             <Car className="mr-2 h-4 w-4" />
             My Vehicles
           </Button>
