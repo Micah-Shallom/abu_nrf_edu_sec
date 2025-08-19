@@ -2,13 +2,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Activity, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Clock, LogIn, LogOut } from "lucide-react";
 
 interface ActivityLog {
   id: string;
   vehiclePlate: string;
   vehicleName: string;
-  entryTime: string;
-  exitTime?: string;
+  logTime: string;
+  logType: 'Entry' | 'Exit';
 }
 
 interface ActivityLogsProps {
@@ -20,6 +21,14 @@ interface ActivityLogsProps {
 export const ActivityLogs = ({ logs, userRole, onNavigateToVehicle }: ActivityLogsProps) => {
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleString();
+  };
+
+  const getLogTypeIcon = (logType: 'Entry' | 'Exit') => {
+    return logType === 'Entry' ? <LogIn className="h-4 w-4 mr-1" /> : <LogOut className="h-4 w-4 mr-1" />;
+  };
+
+  const getLogTypeVariant = (logType: 'Entry' | 'Exit') => {
+    return logType === 'Entry' ? 'default' : 'secondary';
   };
 
   return (
@@ -43,12 +52,9 @@ export const ActivityLogs = ({ logs, userRole, onNavigateToVehicle }: ActivityLo
           <TableHeader>
             <TableRow>
               <TableHead>Vehicle</TableHead>
-              {userRole === "Security" && <TableHead>Driver</TableHead>}
               <TableHead>Plate Number</TableHead>
-              <TableHead>Entry Time</TableHead>
-              <TableHead>Exit Time</TableHead>
-              <TableHead>Status</TableHead>
-              {onNavigateToVehicle && <TableHead className="text-right">Actions</TableHead>}
+              <TableHead>Logs Time</TableHead>
+              <TableHead>Type</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -56,9 +62,6 @@ export const ActivityLogs = ({ logs, userRole, onNavigateToVehicle }: ActivityLo
               logs.map((log) => (
                 <TableRow key={log.id}>
                   <TableCell className="font-medium">{log.vehicleName}</TableCell>
-                  {userRole === "Security" && (
-                    <TableCell className="text-gray-500">-</TableCell>
-                  )}
                   <TableCell>
                     {onNavigateToVehicle ? (
                       <Button 
@@ -72,30 +75,26 @@ export const ActivityLogs = ({ logs, userRole, onNavigateToVehicle }: ActivityLo
                       log.vehiclePlate
                     )}
                   </TableCell>
-                  <TableCell>{formatDateTime(log.entryTime)}</TableCell>
                   <TableCell>
-                    {log.exitTime ? formatDateTime(log.exitTime) : "-"}
+                    <div className="flex items-center">
+                      <Clock className="h-4 w-4 mr-2 text-gray-500" />
+                      {formatDateTime(log.logTime)}
+                    </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={log.exitTime ? "secondary" : "default"}>
-                      {log.exitTime ? "Completed" : "Active"}
+                    <Badge 
+                      variant={getLogTypeVariant(log.logType)} 
+                      className="flex items-center w-min"
+                    >
+                      {getLogTypeIcon(log.logType)}
+                      {log.logType}
                     </Badge>
                   </TableCell>
-                  {onNavigateToVehicle && (
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm">
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  )}
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell 
-                  colSpan={userRole === "Security" ? (onNavigateToVehicle ? 7 : 6) : (onNavigateToVehicle ? 6 : 5)} 
-                  className="text-center py-8 text-gray-500"
-                >
+                <TableCell colSpan={4} className="text-center py-8 text-gray-500">
                   No activity records found
                 </TableCell>
               </TableRow>

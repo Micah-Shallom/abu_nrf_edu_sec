@@ -2,6 +2,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Car, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { Loader2 } from "lucide-react"; 
+import { ConfirmationDialog } from "../ui/ConfirmationDialog";
 
 
 interface Vehicle {
@@ -19,6 +22,7 @@ interface RegisteredVehiclesProps {
   onEdit: (vehicleId: string) => void;
   onDelete: (vehicleId: string) => void;
   onRegisterNew: () => void;
+  loading?: boolean;
 }
 
 export const RegisteredVehicles = ({
@@ -26,9 +30,46 @@ export const RegisteredVehicles = ({
   onEdit,
   onDelete,
   onRegisterNew,
+  loading
 }: RegisteredVehiclesProps) => {
+      const [deletingId, setDeletingId] = useState<string | null>(null);
+      const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+      const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null)
+
+      const handleDeleteClick = (vehicleId: string) => {
+        setVehicleToDelete(vehicleId)
+        setShowConfirmDialog(true)
+      }
+
+      const handleConfirmDelete = async () => {
+        if (!vehicleToDelete) return
+        
+        setShowConfirmDialog(false)
+        setDeletingId(vehicleToDelete)
+        try {
+          await onDelete(vehicleToDelete)
+        } finally {
+          setDeletingId(null)
+          setVehicleToDelete(null)
+        }
+      }
+
+       const handleCancelDelete = () => {
+        setShowConfirmDialog(false)
+        setVehicleToDelete(null)
+      }
+        
   return (
     <div className="space-y-6">
+      <ConfirmationDialog
+        isOpen={showConfirmDialog}
+        title="Delete Vehicle"
+        description="Are you sure you want to delete this vehicle? This action cannot be undone."
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+        confirmText="Delete Vehicle"
+        isLoading={deletingId === vehicleToDelete}
+      />
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Car className="h-6 w-6 text-blue-600" />
@@ -72,16 +113,22 @@ export const RegisteredVehicles = ({
                       variant="ghost" 
                       size="sm"
                       onClick={() => onEdit(vehicle.id)}
+                      disabled={deletingId === vehicle.id}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => onDelete(vehicle.id)}
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => handleDeleteClick(vehicle.id)}
+                    disabled={deletingId === vehicle.id}
                     >
+                    {deletingId === vehicle.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
                       <Trash2 className="h-4 w-4 text-red-600" />
-                    </Button>
+                    )}
+                  </Button>
                   </TableCell>
                 </TableRow>
               ))

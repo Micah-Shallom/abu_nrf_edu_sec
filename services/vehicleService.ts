@@ -74,4 +74,27 @@ export const vehicleService = {
       return { error: 'Network error' };
     }
   },
+  async deleteVehicle(
+    token: string,
+    vehicleId: string
+  ): Promise<{ success?: boolean; error?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/vehicles/deregister/${vehicleId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { error: errorData.message || 'Failed to delete vehicle' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Delete vehicle error:', error);
+      return { error: 'Network error' };
+    }
+  },
 };

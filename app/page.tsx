@@ -88,8 +88,10 @@ type ActivityLog = {
   id: string
   vehiclePlate: string
   vehicleName: string
-  entryTime: string
-  exitTime?: string
+  logTime: string // Changed from entryTime/exitTime
+  logType: 'Entry' | 'Exit' // New field to indicate type
+  timestamp?: string // Optional for API compatibility
+  is_entry?: boolean // Optional for API compatibility
 }
 
 type VehicleSecuritySystemState = {
@@ -127,14 +129,15 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
           id: "1",
           vehiclePlate: "ABC-123",
           vehicleName: "Toyota Camry",
-          entryTime: "2024-01-15 08:30:00",
-          exitTime: "2024-01-15 17:45:00",
+          logTime: "2024-01-15 08:30:00",
+          logType: "Entry",
         },
         {
           id: "2",
           vehiclePlate: "XYZ-789",
           vehicleName: "Honda Civic",
-          entryTime: "2024-01-15 09:15:00",
+          logTime: "2024-01-15 09:15:00",
+          logType: "Exit",
         },
       ],
       isMenuOpen: false,
@@ -419,8 +422,37 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
     });
   }
 
-  deleteVehicle = (vehicleId: string) => {
-    this.setState({ vehicles: this.state.vehicles.filter((v) => v.id !== vehicleId) })
+  deleteVehicle = async (vehicleId: string) => {
+    const token = localStorage.getItem('authToken');
+    if (!token || !this.state.currentUser) {
+      this.setNotification('Please login first', 'error');
+      return false;
+    }
+
+    this.setState({ loading: true });
+
+    try {
+      const { success, error } = await vehicleService.deleteVehicle(token, vehicleId);
+
+      if (error) {
+        this.setNotification(error, 'error');
+        return false;
+      }
+
+      if (success) {
+        this.setState(prevState => ({
+          vehicles: prevState.vehicles.filter(v => v.id !== vehicleId)
+        }));
+        this.setNotification("Vehicle deleted successfully!", 'success');
+        return true;
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete vehicle';
+      this.setNotification(errorMessage, 'error');
+      return false;
+    } finally {
+      this.setState({ loading: false });
+    }
   }
 
   async fetchProfile() {
@@ -746,7 +778,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
                 <RegisteredVehicles
                   vehicles={this.state.vehicles.filter(v => v.userId === this.state.currentUser?.id)}
                   onEdit={this.handleEditVehicle}
-                  onDelete={this.deleteVehicle}
+                  onDelete={this.deleteVehicle} // Now async
                   onRegisterNew={() => this.setState({ 
                     currentPage: "vehicle-registration",
                     vehicleForm: {
@@ -756,6 +788,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
                       type: ""
                     }
                   })}
+                  loading={this.state.loading}
                 />
               )}
             </main>
@@ -765,101 +798,73 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
     );
   }
 
- renderActivityLogsPage(){
-  if (!this.state.currentUser) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Session Expired</h2>
-          <Button onClick={this.handleLogout}>Return to Login</Button>
+ // Alternative: Use the same header style as Profile and Registered Vehicles
+  renderActivityLogsPage() {
+    if (!this.state.currentUser) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Session Expired</h2>
+            <Button onClick={this.handleLogout}>Return to Login</Button>
+          </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header with menu */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <Sheet open={this.state.isMenuOpen} onOpenChange={(open) => this.setState({ isMenuOpen: open })}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="lg:hidden">
-                    <Menu className="h-6 w-6" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-64">
-                  <div className="flex items-center mb-6">
-                    <Car className="h-8 w-8 text-blue-600 mr-3" />
-                    <h1 className="text-xl font-semibold">Vehicle Monitor</h1>
-                  </div>
-                  <NavigationMenu
-                    currentPage={this.state.currentPage}
-                    currentUser={this.state.currentUser}
-                    onPageChange={(page) => this.setState({ currentPage: page, isMenuOpen: false })}
-                    onLogout={this.handleLogout}
-                  />
-                </SheetContent>
-              </Sheet>
-              <Car className="h-8 w-8 text-blue-600 mr-3" />
-              <h1 className="text-xl font-semibold">Vehicle Monitor</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Badge variant="secondary">
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Consistent header with other pages */}
+        <header className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center">
                 {this.state.currentUser.role === "Security" ? (
-                  <Shield className="h-3 w-3 mr-1" />
+                  <Shield className="h-8 w-8 text-blue-600 mr-3" />
                 ) : (
-                  <Car className="h-3 w-3 mr-1" />
+                  <Activity className="h-8 w-8 text-blue-600 mr-3" />
                 )}
-                {this.state.currentUser.role}
-              </Badge>
-              <span className="text-sm text-gray-600 hidden sm:block">
-                {this.state.currentUser.name}
-              </span>
-              <Button variant="ghost" onClick={this.handleLogout} className="hidden sm:flex">
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
+                <h1 className="text-xl font-semibold">
+                  {this.state.currentUser.role === "Security" ? "Activity Monitor" : "Activity Logs"}
+                </h1>
+              </div>
+              <Button 
+                variant="ghost" 
+                onClick={() => this.setState({ currentPage: "dashboard" })}
+              >
+                Back to Dashboard
               </Button>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Main content area */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex gap-8">
-          {/* Desktop sidebar */}
-          <aside className="hidden lg:block w-64 flex-shrink-0">
-            <div className="bg-white rounded-lg shadow p-6">
-              <NavigationMenu
-                currentPage={this.state.currentPage}
-                currentUser={this.state.currentUser}
-                onPageChange={(page) => this.setState({ currentPage: page })}
-                onLogout={this.handleLogout}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex gap-8">
+            <aside className="hidden lg:block w-64 flex-shrink-0">
+              <div className="bg-white rounded-lg shadow p-6">
+                <NavigationMenu
+                  currentPage={this.state.currentPage}
+                  currentUser={this.state.currentUser}
+                  onPageChange={(page) => this.setState({ currentPage: page })}
+                  onLogout={this.handleLogout}
+                />
+              </div>
+            </aside>
+
+            <main className="flex-1">
+              <ActivityLogs
+                logs={this.state.activityLogs}
+                userRole={this.state.currentUser.role}
+                onNavigateToVehicle={(plate) => {
+                  this.setState({ 
+                    currentPage: "registered-vehicles",
+                  });
+                }}
               />
-            </div>
-          </aside>
-
-          {/* Activity logs content */}
-          <main className="flex-1">
-            <ActivityLogs
-              logs={this.state.activityLogs}
-              userRole={this.state.currentUser.role}
-              onNavigateToVehicle={(plate) => {
-                // Optional: Implement vehicle details view
-                this.setState({ 
-                  currentPage: "registered-vehicles",
-                  // You could add filtering logic here if needed
-                });
-              }}
-            />
-          </main>
+            </main>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
   }
 
   renderNotification() {
@@ -982,7 +987,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
               <DashboardMain
                 userRole={this.state.currentUser?.role || "User"}
                 userVehiclesCount={this.state.vehicles.filter(v => v.userId === this.state.currentUser?.id).length}
-                activeSessionsCount={this.state.activityLogs.filter(log => !log.exitTime).length}
+                activeSessionsCount={this.state.activityLogs.filter(log => !log.logTime).length}
                 totalVehiclesCount={this.state.vehicles.length}
                 onNavigate={(page) => this.setState({ currentPage: page })}
               />
