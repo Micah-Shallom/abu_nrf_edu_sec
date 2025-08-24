@@ -28,6 +28,8 @@ import { ProfileView } from "@/components/dashboard/ProfileView"
 import { User } from "lucide-react"
 import { RegisteredVehicles } from "@/components/dashboard/RegisteredVehicles"
 import { vehicleService } from "@/services/vehicleService"  
+import { activityService } from "@/services/activityService"
+import { VehicleActivity } from "@/types/auth"
 import {
   Shield,
   Camera,
@@ -112,6 +114,11 @@ type VehicleSecuritySystemState = {
   notificationMessage: string;
   isEntryNotification: boolean;
   profileLoading: boolean;
+  pendingExitActivity?: {  // Add this to track pending exit activities
+    plateNumber: string;
+    visitorType: 'registered' | 'guest';
+    exitPointId?: string;
+  };
 }
 
 export default class VehicleSecuritySystem extends Component<{}, VehicleSecuritySystemState> {
@@ -125,20 +132,20 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       loading: false,
       profileLoading: false,
       activityLogs: [
-        {
-          id: "1",
-          vehiclePlate: "ABC-123",
-          vehicleName: "Toyota Camry",
-          logTime: "2024-01-15 08:30:00",
-          logType: "Entry",
-        },
-        {
-          id: "2",
-          vehiclePlate: "XYZ-789",
-          vehicleName: "Honda Civic",
-          logTime: "2024-01-15 09:15:00",
-          logType: "Exit",
-        },
+        // {
+        //   id: "1",
+        //   vehiclePlate: "ABC-123",
+        //   vehicleName: "Toyota Camry",
+        //   logTime: "2024-01-15 08:30:00",
+        //   logType: "Entry",
+        // },
+        // {
+        //   id: "2",
+        //   vehiclePlate: "XYZ-789",
+        //   vehicleName: "Honda Civic",
+        //   logTime: "2024-01-15 09:15:00",
+        //   logType: "Exit",
+        // },
       ],
       isMenuOpen: false,
       loginForm: { email: "", password: "" },
@@ -155,18 +162,22 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
   }
 
   // Add these methods to your class
-  toggleNotification = (isEntry: boolean) => {
+  toggleNotification = (isEntry: boolean, vehicleData?: { plateNumber: string; vehicleName: string }) => {
+    const message = isEntry 
+      ? "Are you the one entering the gate?" 
+      : "Exit detected. Is this your vehicle leaving?";
+
     this.setState({
       showNotification: true,
       isEntryNotification: isEntry,
-      notificationMessage: isEntry 
-        ? "Are you the one entering the gate?" 
-        : "Are you the one exiting the gate?"
+      notificationMessage: message
     });
     
-    // Auto-hide after 30 seconds for demo purposes
+    // Auto-hide after 30 seconds
     setTimeout(() => {
-      this.setState({ showNotification: false });
+      if (this.state.showNotification) {
+        this.setState({ showNotification: false });
+      }
     }, 30000);
   }
 
@@ -190,10 +201,17 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
   }, 5000);
   };
 
-  handleNotificationResponse = (response: boolean) => {
-    // This will be connected to backend later
-    console.log(`User responded ${response ? "Yes" : "No"} to ${this.state.isEntryNotification ? "entry" : "exit"}`);
-    this.setState({ showNotification: false });
+  handleNotificationResponse = async (response: boolean) => {
+    if (response && this.state.pendingExitActivity) {
+      // User confirmed exit, but we can't log it via API
+      this.setNotification("Exit confirmation received. Activity will be logged by the system.", 'info');
+    }
+    
+    // Reset the notification state
+    this.setState({ 
+      showNotification: false,
+      pendingExitActivity: undefined
+    });
   }
 
   isPlateNumberTaken = (plateNumber: string): boolean => {
@@ -212,6 +230,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
 
     if (this.state.currentUser) {
       this.fetchVehicles();
+      this.fetchActivities();
     } 
   }
 
@@ -222,10 +241,11 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
         prevState.currentUser.id !== this.state.currentUser.id)) {
       this.fetchProfile();
     }
-    if ((!prevState.currentUser && this.state.                currentUser) ||
-        (prevState.currentPage !== 'registered-vehicles' && 
-        this.state.currentPage === 'registered-vehicles')) {
+    if ((!prevState.currentUser && this.state.currentUser) ||
+        (prevState.currentPage !== 'activity-logs' && 
+          this.state.currentPage === 'activity-logs')) {
       this.fetchVehicles();
+      this.fetchActivities();
     }
   }
 
@@ -521,6 +541,108 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       this.setState({ loading: false });
     }
   };
+
+  fetchActivities = async () => {
+    const token = localStorage.getItem('authToken');
+    if (!token || !this.state.currentUser) return;
+
+    this.setState({ loading: true });
+
+    try {
+      const { vehicles, error: vehiclesError } = await vehicleService.getVehicles(token);
+      
+      if (vehiclesError) {
+        this.setNotification(vehiclesError, 'error');
+        return;
+      }
+
+      if (vehicles && vehicles.length > 0) {
+        const allActivities: VehicleActivity[] = [];
+        
+        for (const vehicle of vehicles) {
+          console.log(`Fetching activities for vehicle ID: ${vehicle.id}`);
+          
+          const { activities, error: activitiesError } = await activityService.getVehicleActivities(
+            token, 
+            vehicle.id
+          );
+          
+          if (activitiesError) {
+            console.error(`Error for vehicle ${vehicle.id}:`, activitiesError);
+            continue;
+          }
+          
+          if (activities) {
+            console.log(`Found ${activities.length} activities for vehicle ${vehicle.id}`);
+            allActivities.push(...activities);
+          }
+        }
+
+        // Sort activities by timestamp (newest first)
+        const sortedActivities = allActivities.sort((a, b) => 
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+
+        // Transform API data to match our UI format
+        const transformedLogs: ActivityLog[] = sortedActivities.map(activity => ({
+          id: activity.id,
+          vehiclePlate: activity.plate_number,
+          vehicleName: this.getVehicleName(activity.plate_number) || 'Unknown Vehicle',
+          logTime: activity.timestamp,
+          logType: activity.is_entry ? 'Entry' as const : 'Exit' as const,
+          rawActivity: activity
+        }));
+
+        // Update the state with transformed logs
+        this.setState({ 
+          activityLogs: transformedLogs
+        });
+
+        // Check for exits that need confirmation
+        this.checkForExitActivities(sortedActivities);
+      }
+    } catch (err) {
+      console.error('Fetch activities error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load activities';
+      this.setNotification(errorMessage, 'error');
+    } finally {
+      this.setState({ loading: false });
+    }
+  }
+
+
+  checkForExitActivities = (activities: VehicleActivity[]) => {
+    // Look for recent exit activities
+    const recentExits = activities.filter(activity => 
+      !activity.is_entry && 
+      new Date(activity.timestamp).getTime() > Date.now() - 300000 // Last 5 minutes
+    );
+
+    if (recentExits.length > 0 && !this.state.showNotification) {
+      const latestExit = recentExits[0];
+      this.setState({
+        pendingExitActivity: {
+          plateNumber: latestExit.plate_number,
+          visitorType: latestExit.visitor_type,
+        }
+      });
+      
+      // Show notification with vehicle info
+      this.toggleNotification(false, { 
+        plateNumber: latestExit.plate_number, 
+        vehicleName: this.getVehicleName(latestExit.plate_number) || 'Unknown Vehicle'
+      });
+    }
+  }
+
+
+  // Helper method to get vehicle name from plate number
+  getVehicleName = (plateNumber: string): string => {
+    const vehicle = this.state.vehicles.find(v => 
+      v.plateNumber === plateNumber || v.plate_number === plateNumber
+    );
+    return vehicle ? `${vehicle.model} (${vehicle.color})` : 'Unknown Vehicle';
+  }
 
   
   NavigationMenu = () => {
@@ -851,15 +973,21 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
             </aside>
 
             <main className="flex-1">
-              <ActivityLogs
-                logs={this.state.activityLogs}
-                userRole={this.state.currentUser.role}
-                onNavigateToVehicle={(plate) => {
-                  this.setState({ 
-                    currentPage: "registered-vehicles",
-                  });
-                }}
-              />
+              {this.state.loading ? (
+                <div className="flex justify-center items-center h-64">
+                  <p>Loading activities...</p>
+                </div>
+              ) : (
+                <ActivityLogs
+                  logs={this.state.activityLogs} // This should now have the fetched data
+                  userRole={this.state.currentUser.role}
+                  onNavigateToVehicle={(plate) => {
+                    this.setState({ 
+                      currentPage: "registered-vehicles",
+                    });
+                  }}
+                />
+              )}
             </main>
           </div>
         </div>
@@ -868,35 +996,35 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
   }
 
   renderNotification() {
-  if (!this.state.showNotification) return null;
+    if (!this.state.showNotification) return null;
 
-  return (
-    <div className={`
-      fixed bottom-0 left-0 right-0 transform translate-y-full
-      animate-slide-up z-50 max-w-md mx-auto mb-8
-    `}>
-      <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">
-          {this.state.notificationMessage}
-        </h3>
-        <div className="flex justify-center space-x-4">
-          <Button 
-            onClick={() => this.handleNotificationResponse(true)}
-            className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white"
-          >
-            Yes
-          </Button>
-          <Button 
-            onClick={() => this.handleNotificationResponse(false)}
-            variant="outline"
-            className="px-6 py-2 border-red-600 text-red-600 hover:bg-red-50"
-          >
-            No
-          </Button>
+    return (
+      <div className={`
+        fixed bottom-0 left-0 right-0 transform translate-y-full
+        animate-slide-up z-50 max-w-md mx-auto mb-8
+      `}>
+        <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">
+            {this.state.notificationMessage}
+          </h3>
+          <div className="flex justify-center space-x-4">
+            <Button 
+              onClick={() => this.handleNotificationResponse(true)}
+              className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white"
+            >
+              Yes
+            </Button>
+            <Button 
+              onClick={() => this.handleNotificationResponse(false)}
+              variant="outline"
+              className="px-6 py-2 border-red-600 text-red-600 hover:bg-red-50"
+            >
+              No
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
   }
 
   renderVehicleRegistrationPage() {
@@ -923,6 +1051,9 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
 
   renderDashboard() {
     const userVehicles = this.state.vehicles.filter((v) => v.userId === this.state.currentUser?.id)
+
+    // Get the 3 most recent activities
+    const recentActivities = this.state.activityLogs.slice(0, 3);
 
     return (
       <div className="min-h-screen bg-gray-50">
@@ -983,15 +1114,16 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1">
-              <DashboardMain
-                userRole={this.state.currentUser?.role || "User"}
-                userVehiclesCount={this.state.vehicles.filter(v => v.userId === this.state.currentUser?.id).length}
-                activeSessionsCount={this.state.activityLogs.filter(log => !log.logTime).length}
-                totalVehiclesCount={this.state.vehicles.length}
-                onNavigate={(page) => this.setState({ currentPage: page })}
-              />
-            </main>
+          <main className="flex-1">
+            <DashboardMain
+              userRole={this.state.currentUser?.role || "User"}
+              userVehiclesCount={userVehicles.length}
+              activeSessionsCount={this.state.activityLogs.filter(log => log.logType === 'Entry').length}
+              totalVehiclesCount={this.state.vehicles.length}
+              recentActivities={recentActivities} // Pass the recent activities
+              onNavigate={(page) => this.setState({ currentPage: page })}
+            />
+          </main>
           </div>
         </div>
         {this.renderNotification()}
@@ -999,37 +1131,49 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
     )
   }
 
+
   render() {
+      const currentPage = this.renderCurrentPage();
+  
+  return (
+      <>
+        {currentPage}
+        {this.state.notification.show && (
+          <Notification
+            message={this.state.notification.message}
+            type={this.state.notification.type}
+            onClose={() => this.setState({
+              notification: {
+                ...this.state.notification,
+                show: false
+              }
+            })}
+            show={this.state.notification.show}
+          />
+        )}
+      </>
+    );
+  }
+
+  // Add this helper method:
+  renderCurrentPage = () => {
     switch (this.state.currentPage) {
       case "landing":
-        return this.renderLandingPage()
+        return this.renderLandingPage();
       case "register":
-        return this.renderRegisterPage()
+        return this.renderRegisterPage();
       case "login":
-        return this.renderLoginPage()
+        return this.renderLoginPage();
       case "profile":
-        return this.renderProfilePage()
+        return this.renderProfilePage();
       case "vehicle-registration":
-        return this.renderVehicleRegistrationPage()
+        return this.renderVehicleRegistrationPage();
       case "activity-logs":
         return this.renderActivityLogsPage();
       case "registered-vehicles":
         return this.renderRegisteredVehiclesPage();
-      {this.state.notification.show && (
-        <Notification
-          message={this.state.notification.message}
-          type={this.state.notification.type}
-          onClose={() => this.setState({
-            notification: {
-              ...this.state.notification,
-              show: false
-            }
-          })}
-          show={this.state.notification.show}
-        />
-      )}
       default:
-        return this.renderDashboard()
+        return this.renderDashboard();
     }
   }
 }

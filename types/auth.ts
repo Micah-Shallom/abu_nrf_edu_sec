@@ -66,3 +66,27 @@ export interface Vehicle {
   userId?: string;       // Optional frontend alias
   createdAt?: string;    // Optional for frontend display
 }
+
+export interface VehicleActivity {
+  id: string;
+  plate_number: string;
+  visitor_type: 'registered' | 'guest';
+  vehicle_id?: string;
+  user_id?: string;
+  is_entry: boolean;
+  vehicle_type: 'bus' | 'car' | 'bike';
+  entry_point_id?: string;
+  exit_point_id?: string;
+  registered_by?: string;
+  timestamp: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface LogVehicleActivityInput {
+  plate_number: string;
+  visitor_type: 'registered' | 'guest';
+  is_entry: boolean;
+  entry_point_id?: string | null;  // Add | null
+  exit_point_id?: string | null;   // Add | null
+}

@@ -10,6 +10,7 @@ interface ActivityLog {
   vehicleName: string;
   logTime: string;
   logType: 'Entry' | 'Exit';
+  rawActivity?: any; // Optional for API data
 }
 
 interface ActivityLogsProps {

@@ -85,7 +85,7 @@ export const vehicleService = {
           'Authorization': `Bearer ${token}`,
         }
       });
-
+      console.log(response)
       if (!response.ok) {
         const errorData = await response.json();
         return { error: errorData.message || 'Failed to delete vehicle' };

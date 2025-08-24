@@ -1,7 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Car, Activity, Shield, Plus, User } from "lucide-react";
+import { Car, Activity, Shield, Plus, User, Clock, LogIn, LogOut } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { CardDescription } from "@/components/ui/card";
+
+interface ActivityLog {
+  id: string;
+  vehiclePlate: string;
+  vehicleName: string;
+  logTime: string;
+  logType: 'Entry' | 'Exit';
+}
 
 interface DashboardMainProps {
   userRole: "User" | "Security";
@@ -9,6 +17,7 @@ interface DashboardMainProps {
   activeSessionsCount: number;
   totalVehiclesCount?: number;
   userStation?: string;
+  recentActivities?: ActivityLog[]; 
   onNavigate: (page: string) => void;
 }
 
@@ -18,8 +27,22 @@ export const DashboardMain = ({
   activeSessionsCount,
   totalVehiclesCount,
   userStation,
+  recentActivities = [],
   onNavigate
 }: DashboardMainProps) => {
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  const getLogTypeIcon = (logType: 'Entry' | 'Exit') => {
+    return logType === 'Entry' ? <LogIn className="h-3 w-3 mr-1" /> : <LogOut className="h-3 w-3 mr-1" />;
+  };
+
+  const getLogTypeVariant = (logType: 'Entry' | 'Exit') => {
+    return logType === 'Entry' ? 'default' : 'secondary';
+  };
+  
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -176,11 +199,50 @@ export const DashboardMain = ({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8 text-gray-400">
-            <p>Activity feed will appear here</p>
+          {recentActivities.length > 0 ? (
+            <div className="space-y-3">
+              {recentActivities.slice(0, 3).map((activity) => (
+                <div key={activity.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className={`p-2 rounded-full ${
+                      activity.logType === 'Entry' ? 'bg-green-100' : 'bg-gray-100'
+                    }`}>
+                      {activity.logType === 'Entry' ? (
+                        <LogIn className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <LogOut className="h-4 w-4 text-gray-600" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{activity.vehicleName}</p>
+                      <p className="text-xs text-gray-500 truncate">{activity.vehiclePlate}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium">
+                      {formatDateTime(activity.logTime)}
+                    </p>
+                    <Badge 
+                      variant={getLogTypeVariant(activity.logType)} 
+                      className="text-xs mt-1"
+                    >
+                      {getLogTypeIcon(activity.logType)}
+                      {activity.logType}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-400">
+              <p>No recent activity found</p>
+            </div>
+          )}
+          
+          <div className="mt-4 text-center">
             <button 
               onClick={() => onNavigate("activity-logs")}
-              className="text-blue-600 hover:text-blue-800 mt-2"
+              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
             >
               View full activity logs
             </button>
