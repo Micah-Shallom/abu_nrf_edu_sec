@@ -6,38 +6,41 @@ interface NotificationProps {
   type: 'success' | 'error' | 'info';
   onClose: () => void;
   show: boolean;
+  onConfirm?: (response: boolean) => void;
 }
 
-export const Notification = ({ message, type, onClose, show }: NotificationProps) => {
-  useEffect(() => {
-    if (show) {
-      const timer = setTimeout(onClose, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [show, onClose]);
-
+export const Notification = ({ message, type, onClose, show, onConfirm}: NotificationProps) => {
   if (!show) return null;
 
-  const iconMap = {
-    success: <CheckCircle className="h-5 w-5 text-green-500" />,
-    error: <AlertCircle className="h-5 w-5 text-red-500" />,
-    info: <Info className="h-5 w-5 text-blue-500" />
-  };
-
-  const bgColorMap = {
-    success: 'bg-green-50 border-green-200',
-    error: 'bg-red-50 border-red-200',
-    info: 'bg-blue-50 border-blue-200'
-  };
-
-  return (
-    <div className={`fixed top-4 right-4 z-50 border rounded-md p-4 ${bgColorMap[type]} shadow-lg`}>
-      <div className="flex items-start space-x-3">
-        {iconMap[type]}
-        <div>
-          <p className="font-medium text-gray-900">{message}</p>
+    return (
+      <div className="fixed bottom-4 right-4 bg-white rounded-lg shadow-xl border p-4 max-w-sm z-50">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-gray-900">{message}</p>
+            {onConfirm && (
+              <div className="mt-3 flex space-x-2">
+                <button
+                  onClick={() => onConfirm(true)}
+                  className="px-3 py-1 bg-green-600 text-white rounded text-sm"
+                >
+                  Yes
+                </button>
+                <button
+                  onClick={() => onConfirm(false)}
+                  className="px-3 py-1 bg-red-600 text-white rounded text-sm"
+                >
+                  No
+                </button>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-4 text-gray-400 hover:text-gray-600"
+          >
+            ×
+          </button>
         </div>
       </div>
-    </div>
-  );
+    );
 };

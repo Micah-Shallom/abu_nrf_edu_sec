@@ -30,6 +30,7 @@ import { RegisteredVehicles } from "@/components/dashboard/RegisteredVehicles"
 import { vehicleService } from "@/services/vehicleService"  
 import { activityService } from "@/services/activityService"
 import { VehicleActivity } from "@/types/auth"
+import { webSocketService, WebSocketMessage } from "@/services/websocketService"
 import {
   Shield,
   Camera,
@@ -119,6 +120,14 @@ type VehicleSecuritySystemState = {
     visitorType: 'registered' | 'guest';
     exitPointId?: string;
   };
+  webSocketConnected: boolean;
+  pendingExitConfirmation?: {
+    pending_id: string;
+    token: string;
+    message: string;
+    plateNumber: string;
+    vehicleName: string;
+  };
 }
 
 export default class VehicleSecuritySystem extends Component<{}, VehicleSecuritySystemState> {
@@ -131,22 +140,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       vehicles: [],
       loading: false,
       profileLoading: false,
-      activityLogs: [
-        // {
-        //   id: "1",
-        //   vehiclePlate: "ABC-123",
-        //   vehicleName: "Toyota Camry",
-        //   logTime: "2024-01-15 08:30:00",
-        //   logType: "Entry",
-        // },
-        // {
-        //   id: "2",
-        //   vehiclePlate: "XYZ-789",
-        //   vehicleName: "Honda Civic",
-        //   logTime: "2024-01-15 09:15:00",
-        //   logType: "Exit",
-        // },
-      ],
+      activityLogs: [],
       isMenuOpen: false,
       loginForm: { email: "", password: "" },
       registerForm: { name: "", email: "", password: "" },
@@ -158,6 +152,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       showNotification: false,
       notificationMessage: "",
       isEntryNotification: true,
+      webSocketConnected: false,
     }
   }
 
@@ -202,15 +197,28 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
   };
 
   handleNotificationResponse = async (response: boolean) => {
-    if (response && this.state.pendingExitActivity) {
-      // User confirmed exit, but we can't log it via API
-      this.setNotification("Exit confirmation received. Activity will be logged by the system.", 'info');
+    const { pendingExitConfirmation } = this.state;
+    
+    if (response && pendingExitConfirmation) {
+      // Send response via WebSocket
+      const success = webSocketService.sendMessage({
+        type: 'response',
+        pending_id: pendingExitConfirmation.pending_id,
+        token: pendingExitConfirmation.token,
+        confirmed: response
+      });
+
+      if (success) {
+        this.setNotification("Response sent successfully", 'success');
+      } else {
+        this.setNotification("Failed to send response", 'error');
+      }
     }
     
     // Reset the notification state
     this.setState({ 
       showNotification: false,
-      pendingExitActivity: undefined
+      pendingExitConfirmation: undefined
     });
   }
 
@@ -223,10 +231,10 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
   
   // Add this in componentDidMount to simulate notifications:
   componentDidMount() {
-    // Simulate entry notification after 5 seconds
-    setTimeout(() => this.toggleNotification(true), 5000);
-    // Simulate exit notification after 20 seconds
-    setTimeout(() => this.toggleNotification(false), 20000);
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      this.connectWebSocket(token);
+    }
 
     if (this.state.currentUser) {
       this.fetchVehicles();
@@ -275,6 +283,8 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
         };
 
         localStorage.setItem('authToken', token);
+
+        this.connectWebSocket(token);
         
         // First set the user state
         await new Promise<void>((resolve) => {
@@ -441,6 +451,64 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       }
     });
   }
+
+  handleExitConfirmation = (message: WebSocketMessage) => {
+    if (message.type === 'exit_confirmation' && message.pending_id && message.token) {
+      // Extract vehicle information from the message or use fallback
+      const plateNumber = this.extractPlateNumberFromMessage(message.message) || 'Unknown';
+      const vehicleName = this.getVehicleName(plateNumber) || 'Unknown Vehicle';
+      
+      this.setState({
+        pendingExitConfirmation: {
+          pending_id: message.pending_id,
+          token: message.token,
+          message: message.message || 'Are you the one exiting the premises?',
+          plateNumber,
+          vehicleName
+        }
+      });
+      
+      this.showWebSocketNotification();
+    }
+  }
+
+  connectWebSocket = (token: string) => {
+    try {
+      webSocketService.connect(token);
+      
+      // Listen for messages
+      webSocketService.onMessage((message) => {
+        if (message.type === 'exit_confirmation') {
+          this.handleExitConfirmation(message);
+        }
+        
+        // Update connection status
+        this.setState({ webSocketConnected: webSocketService.getConnectionStatus() });
+      });
+      
+    } catch (error) {
+      console.error('WebSocket connection failed:', error);
+    }
+  }
+
+  extractPlateNumberFromMessage = (message?: string): string | null => {
+    if (!message) return null;
+    
+    // Try to extract plate number from message (e.g., "Vehicle ABC-123 is exiting")
+    const plateMatch = message.match(/[A-Z0-9-]{6,10}/);
+    return plateMatch ? plateMatch[0] : null;
+  }
+
+  showWebSocketNotification = () => {
+    const { pendingExitConfirmation } = this.state;
+    if (!pendingExitConfirmation) return;
+
+    this.toggleNotification(false, {
+      plateNumber: pendingExitConfirmation.plateNumber,
+      vehicleName: pendingExitConfirmation.vehicleName
+    });
+  }
+
 
   deleteVehicle = async (vehicleId: string) => {
     const token = localStorage.getItem('authToken');
@@ -1131,6 +1199,19 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
     )
   }
 
+  renderWebSocketStatus() {
+    return (
+      <div className={`fixed top-4 right-4 px-3 py-1 rounded-full text-xs font-medium ${
+        this.state.webSocketConnected 
+          ? 'bg-green-100 text-green-800' 
+          : 'bg-red-100 text-red-800'
+      }`}>
+        {this.state.webSocketConnected ? '🟢 Connected' : '🔴 Disconnected'}
+      </div>
+    );
+  }
+
+
 
   render() {
       const currentPage = this.renderCurrentPage();
@@ -1138,6 +1219,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
   return (
       <>
         {currentPage}
+        {this.renderWebSocketStatus()}
         {this.state.notification.show && (
           <Notification
             message={this.state.notification.message}
@@ -1148,6 +1230,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
                 show: false
               }
             })}
+            onConfirm={this.state.pendingExitConfirmation ? this.handleNotificationResponse : undefined}
             show={this.state.notification.show}
           />
         )}
