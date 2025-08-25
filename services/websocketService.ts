@@ -14,8 +14,22 @@ class WebSocketService {
   private maxReconnectAttempts = 5;
   private reconnectInterval = 3000;
   private messageHandlers: ((message: WebSocketMessage) => void)[] = [];
+  private connectionHandlers: ((connected: boolean) => void)[] = [];
+
 
   constructor(private baseUrl: string = 'ws://localhost:10000/ws') {}
+
+  private notifyConnectionStatus() {
+    this.connectionHandlers.forEach(handler => handler(this.isConnected));
+  }
+
+  onConnectionChange(handler: (connected: boolean) => void) {
+    this.connectionHandlers.push(handler);
+    return () => {
+      this.connectionHandlers = this.connectionHandlers.filter(h => h !== handler);
+    };
+  }
+
 
   connect(token: string) {
     if (this.isConnected) return;
@@ -43,6 +57,7 @@ class WebSocketService {
     console.log('WebSocket connected successfully');
     this.isConnected = true;
     this.reconnectAttempts = 0;
+    this.notifyConnectionStatus(); // Notify about connection change
   }
 
   private handleMessage(event: MessageEvent) {
@@ -62,6 +77,8 @@ class WebSocketService {
     console.log('WebSocket connection closed:', event.code, event.reason);
     this.isConnected = false;
     this.ws = null;
+    this.notifyConnectionStatus(); // Notify about connection change
+
     
     // Attempt reconnect if it wasn't a clean close
     if (!event.wasClean) {

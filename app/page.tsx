@@ -131,6 +131,8 @@ type VehicleSecuritySystemState = {
 }
 
 export default class VehicleSecuritySystem extends Component<{}, VehicleSecuritySystemState> {
+  private connectionUnsubscribe?: () => void;
+  private messageUnsubscribe?: () => void;
   constructor(props: {}) {
     super(props)
     this.state = {
@@ -158,9 +160,15 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
 
   // Add these methods to your class
   toggleNotification = (isEntry: boolean, vehicleData?: { plateNumber: string; vehicleName: string }) => {
-    const message = isEntry 
-      ? "Are you the one entering the gate?" 
-      : "Exit detected. Is this your vehicle leaving?";
+    let message: string;
+    
+    if (isEntry) {
+      message = "Are you the one entering the gate?";
+    } else if (vehicleData) {
+      message = `Are you the one exiting the gate in ${vehicleData.vehicleName} (${vehicleData.plateNumber})?`;
+    } else {
+      message = "Are you the one exiting the premises?";
+    }
 
     this.setState({
       showNotification: true,
@@ -240,6 +248,19 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       this.fetchVehicles();
       this.fetchActivities();
     } 
+  }
+
+  componentWillUnmount() {
+    // Clean up WebSocket subscriptions properly
+    if (this.connectionUnsubscribe) {
+      this.connectionUnsubscribe();
+      this.connectionUnsubscribe = undefined;
+    }
+    if (this.messageUnsubscribe) {
+      this.messageUnsubscribe();
+      this.messageUnsubscribe = undefined;
+    }
+    webSocketService.disconnect();
   }
 
   componentDidUpdate(prevProps: {}, prevState: VehicleSecuritySystemState) {
@@ -454,6 +475,8 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
 
   handleExitConfirmation = (message: WebSocketMessage) => {
     if (message.type === 'exit_confirmation' && message.pending_id && message.token) {
+      console.log('Processing exit confirmation:', message);
+      
       // Extract vehicle information from the message or use fallback
       const plateNumber = this.extractPlateNumberFromMessage(message.message) || 'Unknown';
       const vehicleName = this.getVehicleName(plateNumber) || 'Unknown Vehicle';
@@ -466,24 +489,38 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
           plateNumber,
           vehicleName
         }
+      }, () => {
+        // Show notification after state is updated
+        this.showWebSocketNotification();
       });
-      
-      this.showWebSocketNotification();
     }
   }
 
   connectWebSocket = (token: string) => {
     try {
+      // Clean up any existing subscriptions first
+      if (this.connectionUnsubscribe) {
+        this.connectionUnsubscribe();
+      }
+      if (this.messageUnsubscribe) {
+        this.messageUnsubscribe();
+      }
+
       webSocketService.connect(token);
       
+      // Listen for connection status changes
+      this.connectionUnsubscribe = webSocketService.onConnectionChange((connected) => {
+        console.log('WebSocket connection status changed:', connected);
+        this.setState({ webSocketConnected: connected });
+      });
+      
       // Listen for messages
-      webSocketService.onMessage((message) => {
+      this.messageUnsubscribe = webSocketService.onMessage((message) => {
+        console.log('WebSocket message received:', message);
+        
         if (message.type === 'exit_confirmation') {
           this.handleExitConfirmation(message);
         }
-        
-        // Update connection status
-        this.setState({ webSocketConnected: webSocketService.getConnectionStatus() });
       });
       
     } catch (error) {
@@ -503,9 +540,12 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
     const { pendingExitConfirmation } = this.state;
     if (!pendingExitConfirmation) return;
 
-    this.toggleNotification(false, {
-      plateNumber: pendingExitConfirmation.plateNumber,
-      vehicleName: pendingExitConfirmation.vehicleName
+    const notificationMessage = `Are you the one exiting in ${pendingExitConfirmation.vehicleName} (${pendingExitConfirmation.plateNumber})?`;
+    
+    this.setState({
+      showNotification: true,
+      notificationMessage: notificationMessage,
+      isEntryNotification: false
     });
   }
 
@@ -1211,6 +1251,33 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
     );
   }
 
+  testWebSocketMessage = () => {
+    const testMessage: WebSocketMessage = {
+      type: 'exit_confirmation',
+      pending_id: 'test-pending-123',
+      token: 'test-token-456',
+      message: 'Vehicle ABC-123 is exiting the premises. Are you the driver?'
+    };
+    
+    this.handleExitConfirmation(testMessage);
+  }
+
+  // Add a test button in your render method for development
+  renderTestButton() {
+    if (process.env.NODE_ENV === 'development') {
+      return (
+        <button
+          onClick={this.testWebSocketMessage}
+          className="fixed top-20 right-4 bg-blue-500 text-white px-3 py-1 rounded text-sm"
+        >
+          Test WebSocket
+        </button>
+      );
+    }
+    return null;
+  }
+
+
 
 
   render() {
@@ -1220,18 +1287,18 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       <>
         {currentPage}
         {this.renderWebSocketStatus()}
-        {this.state.notification.show && (
+        {this.renderTestButton()}
+        {this.state.showNotification && (
           <Notification
-            message={this.state.notification.message}
-            type={this.state.notification.type}
-            onClose={() => this.setState({
-              notification: {
-                ...this.state.notification,
-                show: false
-              }
+            message={this.state.notificationMessage}
+            type="info"
+            onClose={() => this.setState({ 
+              showNotification: false,
+              pendingExitConfirmation: undefined
             })}
             onConfirm={this.state.pendingExitConfirmation ? this.handleNotificationResponse : undefined}
-            show={this.state.notification.show}
+            show={this.state.showNotification}
+            isExitConfirmation={!!this.state.pendingExitConfirmation}
           />
         )}
       </>
