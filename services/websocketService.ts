@@ -138,6 +138,20 @@ class WebSocketService {
     };
   }
 
+  getDebugInfo() {
+    return {
+      connected: this.isConnected,
+      url: this.baseUrl,
+      reconnectAttempts: this.reconnectAttempts,
+      messageHandlers: this.messageHandlers.length,
+      connectionHandlers: this.connectionHandlers.length
+    };
+  }
+
+  static getDebugInfo() {
+    return webSocketService.getDebugInfo();
+  }
+
   getConnectionStatus() {
     return this.isConnected;
   }

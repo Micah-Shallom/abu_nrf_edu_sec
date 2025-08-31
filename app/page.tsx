@@ -158,6 +158,8 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
     }
   }
 
+
+
   // Add these methods to your class
   toggleNotification = (isEntry: boolean, vehicleData?: { plateNumber: string; vehicleName: string }) => {
     let message: string;
@@ -236,21 +238,64 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       v.plate_number?.toLowerCase() === plateNumber.toLowerCase()
     );
   };
-  
+
+  private saveStateToStorage = async () => {
+    const { statePersistence } = await import('@/lib/utils');
+    statePersistence.saveState({
+      currentPage: this.state.currentPage,
+      currentUser: this.state.currentUser,
+      loginForm: this.state.loginForm,
+      registerForm: this.state.registerForm,
+      profileForm: this.state.profileForm,
+      vehicleForm: this.state.vehicleForm,
+    });
+  };
+
+  private loadStateFromStorage = async () => {
+    const { statePersistence } = await import('@/lib/utils');
+    const savedState = statePersistence.loadState();
+    
+    if (savedState.currentPage) {
+      this.setState(prevState => ({
+        ...prevState,
+        currentPage: savedState.currentPage || 'landing',
+        currentUser: savedState.currentUser || null,
+        loginForm: savedState.loginForm || prevState.loginForm,
+        registerForm: savedState.registerForm || prevState.registerForm,
+        profileForm: savedState.profileForm || prevState.profileForm,
+        vehicleForm: savedState.vehicleForm || prevState.vehicleForm,
+      }));
+    }
+  };
+    
   // Add this in componentDidMount to simulate notifications:
   componentDidMount() {
     const token = localStorage.getItem('authToken');
-    if (token) {
-      this.connectWebSocket(token);
-    }
 
-    if (this.state.currentUser) {
-      this.fetchVehicles();
-      this.fetchActivities();
-    } 
+      
+      this.loadStateFromStorage().then(() => {
+        if (token) {
+        this.connectWebSocket(token);
+      }
+
+      if (token && !this.state.currentUser) {
+        this.reconnectUserSession(token);
+      } else if (token && this.state.currentUser) {
+        this.connectWebSocket(token);
+      }
+
+
+      if (this.state.currentUser) {
+        this.fetchVehicles();
+        this.fetchActivities();
+      } 
+      window.addEventListener('popstate', this.handleBrowserNavigation);
+    });
   }
 
   componentWillUnmount() {
+    window.removeEventListener('popstate', this.handleBrowserNavigation);
+
     // Clean up WebSocket subscriptions properly
     if (this.connectionUnsubscribe) {
       this.connectionUnsubscribe();
@@ -278,6 +323,25 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
     }
   }
 
+  private reconnectUserSession = async (token: string) => {
+    try {
+      this.connectWebSocket(token);
+    } catch (error) {
+      console.error('Failed to reconnect user session:', error);
+      localStorage.removeItem('authToken');
+      const { statePersistence } = await import('@/lib/utils');
+      statePersistence.clearState();
+    }
+  };
+
+  private handleBrowserNavigation = (event: PopStateEvent) => {
+    // This prevents the default back behavior and uses our state
+    event.preventDefault();
+    
+    // You can optionally implement your own navigation history
+    // For now, we'll just maintain the current page from state
+    console.log('Browser navigation attempted, maintaining current state');
+  };
 
 
   handleLogin = async (e: React.FormEvent) => {
@@ -312,8 +376,12 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
           this.setState({ 
             currentUser: appUser,
             currentPage: "dashboard"
-          }, resolve); // Using callback to ensure state is updated
+          }, () => {
+            this.saveStateToStorage(); // Save state after update
+            resolve();
+          });
         });
+      
         
         // Then fetch vehicles
         await this.fetchVehicles();
@@ -339,7 +407,9 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       users: [...this.state.users, newUser],
       currentUser: newUser,
       currentPage: "profile",
-    })
+    }, () => {
+      this.saveStateToStorage();
+    });
   }
 
   handleProfileSetup = async (e: React.FormEvent) => {
@@ -462,14 +532,20 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
 
   handleLogout = () => {
     localStorage.removeItem('authToken');
-    this.setState({ 
-      currentUser: null,
-      currentPage: "landing",
-      profileForm: {  // Reset profile form
-        name: "",
-        email: "",
-        phone: "",
-      }
+    
+    // Use dynamic import to avoid circular dependencies
+    import('@/lib/utils').then(({ statePersistence }) => {
+      statePersistence.clearState();
+      
+      this.setState({ 
+        currentUser: null,
+        currentPage: "landing",
+        profileForm: { 
+          name: "",
+          email: "",
+          phone: "",
+        }
+      });
     });
   }
 
@@ -494,6 +570,15 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
         this.showWebSocketNotification();
       });
     }
+  }
+
+  handlePageChange = (page: string) => {
+    this.setState({ 
+      currentPage: page,
+      isMenuOpen: false 
+    }, () => {
+      this.saveStateToStorage(); // Save state after page change
+    });
   }
 
   connectWebSocket = (token: string) => {
@@ -763,9 +848,10 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
             <Button
               variant={this.state.currentPage === "dashboard" ? "default" : "ghost"}
               className="w-full justify-start"
-              onClick={() => {
-                this.setState({ currentPage: "dashboard", isMenuOpen: false })
-              }}
+              // onClick={() => {
+              //   this.setState({ currentPage: "dashboard", isMenuOpen: false })
+              // }}
+              onClick={() => this.handlePageChange("dashboard")}
             >
               <Car className="mr-2 h-4 w-4" />
               Dashboard
@@ -773,9 +859,10 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
             <Button
               variant={this.state.currentPage === "vehicle-registration" ? "default" : "ghost"}
               className="w-full justify-start"
-              onClick={() => {
-                this.setState({ currentPage: "vehicle-registration", isMenuOpen: false })
-              }}
+              // onClick={() => {
+              //   this.setState({ currentPage: "vehicle-registration", isMenuOpen: false })
+              // }}
+              onClick={() => this.handlePageChange("vehicle-registration")}
             >
               <Plus className="mr-2 h-4 w-4" />
               Register Vehicle
@@ -783,9 +870,10 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
             <Button
               variant={this.state.currentPage === "registered-vehicles" ? "default" : "ghost"}
               className="w-full justify-start"
-              onClick={() => {
-                this.setState({ currentPage: "registered-vehicles", isMenuOpen: false })
-              }}
+              // onClick={() => {
+              //   this.setState({ currentPage: "registered-vehicles", isMenuOpen: false })
+              // }}
+              onClick={() => this.handlePageChange("registered-vehicles")}
             >
               <Car className="mr-2 h-4 w-4" />
               My Vehicles
@@ -793,9 +881,11 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
             <Button
               variant={this.state.currentPage === "activity-logs" ? "default" : "ghost"}
               className="w-full justify-start"
-              onClick={() => {
-                this.setState({ currentPage: "activity-logs", isMenuOpen: false })
-              }}
+              // onClick={() => {
+              //   this.setState({ currentPage: "activity-logs", isMenuOpen: false })
+              // }}
+              onClick={() => this.handlePageChange("activity-logs")}
+
             >
               <Activity className="mr-2 h-4 w-4" />
               Activity Logs
@@ -807,9 +897,10 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
             <Button
               variant={this.state.currentPage === "dashboard" ? "default" : "ghost"}
               className="w-full justify-start"
-              onClick={() => {
-                this.setState({ currentPage: "dashboard", isMenuOpen: false })
-              }}
+              // onClick={() => {
+              //   this.setState({ currentPage: "dashboard", isMenuOpen: false })
+              // }}
+              onClick={() => this.handlePageChange("dashboard")}
             >
               <Shield className="mr-2 h-4 w-4" />
               Security Dashboard
@@ -817,9 +908,10 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
             <Button
               variant={this.state.currentPage === "activity-logs" ? "default" : "ghost"}
               className="w-full justify-start"
-              onClick={() => {
-                this.setState({ currentPage: "activity-logs", isMenuOpen: false })
-              }}
+              // onClick={() => {
+              //   this.setState({ currentPage: "activity-logs", isMenuOpen: false })
+              // }}
+              onClick={() => this.handlePageChange("activity-logs")}
             >
               <Activity className="mr-2 h-4 w-4" />
               Monitor Activity
@@ -829,9 +921,10 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
         <Button
           variant={this.state.currentPage === "profile" ? "default" : "ghost"}
           className="w-full justify-start"
-          onClick={() => {
-            this.setState({ currentPage: "profile", isMenuOpen: false }) // Changed to "profile"
-          }}
+          // onClick={() => {
+          //   this.setState({ currentPage: "profile", isMenuOpen: false }) // Changed to "profile"
+          // }}
+          onClick={() => this.handlePageChange("profile")}
           >
           <User className="mr-2 h-4 w-4" />
           Profile
@@ -907,7 +1000,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
               </div>
               <Button 
                 variant="ghost" 
-                onClick={() => this.setState({ currentPage: "dashboard" })}
+                onClick={() => this.handlePageChange("dashboard")}
               >
                 Back to Dashboard
               </Button>
@@ -984,7 +1077,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
               </div>
               <Button 
                 variant="ghost" 
-                onClick={() => this.setState({ currentPage: "dashboard" })}
+                onClick={() => this.handlePageChange("dashboard")}
               >
                 Back to Dashboard
               </Button>
@@ -1059,7 +1152,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
               </div>
               <Button 
                 variant="ghost" 
-                onClick={() => this.setState({ currentPage: "dashboard" })}
+                onClick={() => this.handlePageChange("dashboard")}
               >
                 Back to Dashboard
               </Button>
@@ -1152,7 +1245,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
           this.setState({ vehicleForm: {...this.state.vehicleForm, type} })
         }
         onSubmit={this.handleVehicleRegistration}
-        onCancel={() => this.setState({ currentPage: "dashboard" })}
+        onCancel={() => this.handlePageChange("dashboard")}
       />
     );
   }
@@ -1229,7 +1322,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
               activeSessionsCount={this.state.activityLogs.filter(log => log.logType === 'Entry').length}
               totalVehiclesCount={this.state.vehicles.length}
               recentActivities={recentActivities} // Pass the recent activities
-              onNavigate={(page) => this.setState({ currentPage: page })}
+              onNavigate={(page) => this.handlePageChange(page)}
             />
           </main>
           </div>
