@@ -37,8 +37,27 @@ export const VehicleRegistration = ({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <Card className="border-0 shadow-lg">
+      <header className="bg-white shadow-lg border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <button 
+                className="flex items-center space-x-3 hover:opacity-80 transition-opacity mr-6"
+                onClick={onCancel}
+              >
+                <Car className="h-8 w-8 text-blue-600" />
+                <span className="text-xl font-semibold text-gray-900">Vehicle Monitor</span>
+              </button>
+              <Car className="h-6 w-6 text-blue-600 mr-2" />
+              <h1 className="text-lg font-medium">Register Vehicle</h1>
+            </div>
+          </div>
+        </div>
+      </header>
+      
+      <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-2xl mx-auto">
+          <Card className="border-0 shadow-lg rounded-xl">
           <CardHeader>
             <div className="flex items-center space-x-3">
               <Car className="h-8 w-8 text-blue-600" />
@@ -125,6 +144,7 @@ export const VehicleRegistration = ({
             </form>
           </CardContent>
         </Card>
+        </div>
       </div>
     </div>
   );

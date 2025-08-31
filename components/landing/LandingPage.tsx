@@ -8,22 +8,38 @@ import Image from "next/image"
 interface LandingPageProps {
   onNavigateToRegister: () => void;
   onNavigateToLogin: () => void;
+  hasActiveSession?: boolean;
+  onNavigateToDashboard?: () => void;
 }
 
 export const LandingPage = ({
   onNavigateToRegister,
   onNavigateToLogin,
+  hasActiveSession = false,
+  onNavigateToDashboard,
 }: LandingPageProps) => {
+  
+  const handleGetStarted = () => {
+    if (hasActiveSession && onNavigateToDashboard) {
+      onNavigateToDashboard();
+    } else {
+      onNavigateToRegister();
+    }
+  };
+  
   return (
     <div className="min-h-screen bg-white">
       {/* Navigation */}
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-2">
+            <button 
+              className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
+              onClick={hasActiveSession && onNavigateToDashboard ? onNavigateToDashboard : undefined}
+            >
               <Shield className="h-8 w-8 text-teal-600" />
               <span className="text-xl font-bold text-navy-900">ABUNRFEDUSEC</span>
-            </div>
+            </button>
 
             <div className="hidden md:flex items-center space-x-8">
               <Link href="#" className="text-gray-700 hover:text-teal-600 transition-colors">
@@ -32,16 +48,6 @@ export const LandingPage = ({
               <Link href="#how-it-works" className="text-gray-700 hover:text-teal-600 transition-colors">
                 How It Works
               </Link>
-              <Button 
-                variant="link" 
-                className="text-gray-700 hover:text-teal-600 transition-colors p-0 h-auto"
-                onClick={onNavigateToRegister}
-              >
-                Register Vehicle
-              </Button>
-              {/* <Link href="#dashboard" className="text-gray-700 hover:text-teal-600 transition-colors">
-                Security Dashboard
-              </Link> */}
               <Link href="#contact" className="text-gray-700 hover:text-teal-600 transition-colors">
                 Contact
               </Link>
@@ -50,9 +56,9 @@ export const LandingPage = ({
             <div className="flex items-center space-x-4">
               <Button 
                 className="bg-teal-600 hover:bg-teal-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
-                onClick={onNavigateToRegister}
+                onClick={onNavigateToLogin}
               >
-                Get Started
+                Login
               </Button>
               <Button variant="ghost" size="icon" className="md:hidden">
                 <Menu className="h-5 w-5" />
@@ -79,9 +85,9 @@ export const LandingPage = ({
               <Button
                 size="lg"
                 className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-4 text-lg shadow-xl hover:shadow-2xl transition-all duration-300"
-                onClick={onNavigateToRegister}
+                onClick={handleGetStarted}
               >
-                Register Your Vehicle
+                Get Started
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
               <Button
@@ -90,7 +96,7 @@ export const LandingPage = ({
                 className="border-white text-white hover:bg-white hover:text-slate-900 px-8 py-4 text-lg transition-all duration-300 bg-transparent"
                 onClick={onNavigateToLogin}
               >
-                Explore Features
+                Login
               </Button>
             </div>
           </div>

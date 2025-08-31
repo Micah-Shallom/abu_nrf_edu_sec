@@ -37,21 +37,24 @@ export const ActivityLogs = ({ logs, userRole, onNavigateToVehicle }: ActivityLo
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Activity className="h-6 w-6 text-blue-600" />
-          <h2 className="text-2xl font-bold">
+          <h2 className="text-3xl font-bold text-gray-900">
             {userRole === "Security" ? "Activity Monitor" : "Your Activity Logs"}
           </h2>
         </div>
         {userRole === "Security" && (
-          <Button variant="outline">
+          <Button 
+            variant="outline"
+            className="shadow-md hover:shadow-lg transition-all duration-300"
+          >
             Export Records
           </Button>
         )}
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-xl border-0 shadow-md overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-gray-50">
               <TableHead>Vehicle</TableHead>
               <TableHead>Plate Number</TableHead>
               <TableHead>Logs Time</TableHead>
@@ -61,7 +64,7 @@ export const ActivityLogs = ({ logs, userRole, onNavigateToVehicle }: ActivityLo
           <TableBody>
             {logs.length > 0 ? (
               logs.map((log) => (
-                <TableRow key={log.id}>
+                <TableRow key={log.id} className="hover:bg-gray-50 transition-colors">
                   <TableCell className="font-medium">{log.vehicleName}</TableCell>
                   <TableCell>
                     {onNavigateToVehicle ? (
@@ -96,7 +99,9 @@ export const ActivityLogs = ({ logs, userRole, onNavigateToVehicle }: ActivityLo
             ) : (
               <TableRow>
                 <TableCell colSpan={4} className="text-center py-8 text-gray-500">
-                  No activity records found
+                  <Activity className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                  <p className="text-lg">No activity records found</p>
+                  <p className="text-sm">Vehicle activities will appear here once you start using the system</p>
                 </TableCell>
               </TableRow>
             )}

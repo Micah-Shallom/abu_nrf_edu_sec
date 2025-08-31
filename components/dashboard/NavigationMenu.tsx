@@ -29,12 +29,12 @@ export const NavigationMenu = ({
     return null; // or return a loading spinner
   }
   return (
-    <nav className="space-y-2">
+    <nav className="space-y-1">
       {currentUser.role === "User" && (
         <>
           <Button
             variant={currentPage === "dashboard" ? "default" : "ghost"}
-            className="w-full justify-start"
+            className="w-full justify-start h-11 text-left font-medium"
             onClick={() => onPageChange("dashboard")}
           >
             <Car className="mr-2 h-4 w-4" />
@@ -42,7 +42,7 @@ export const NavigationMenu = ({
           </Button>
           <Button
             variant={currentPage === "vehicle-registration" ? "default" : "ghost"}
-            className="w-full justify-start"
+            className="w-full justify-start h-11 text-left font-medium"
             onClick={() => onPageChange("vehicle-registration")}
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -50,7 +50,7 @@ export const NavigationMenu = ({
           </Button>
           <Button
             variant={currentPage === "registered-vehicles" ? "default" : "ghost"}
-            className="w-full justify-start"
+            className="w-full justify-start h-11 text-left font-medium"
             onClick={() => onPageChange("registered-vehicles")}
             >
             <Car className="mr-2 h-4 w-4" />
@@ -58,7 +58,7 @@ export const NavigationMenu = ({
           </Button>
           <Button
             variant={currentPage === "activity-logs" ? "default" : "ghost"}
-            className="w-full justify-start"
+            className="w-full justify-start h-11 text-left font-medium"
             onClick={() => onPageChange("activity-logs")}
           >
             <Activity className="mr-2 h-4 w-4" />
@@ -70,7 +70,7 @@ export const NavigationMenu = ({
         <>
           <Button
             variant={currentPage === "dashboard" ? "default" : "ghost"}
-            className="w-full justify-start"
+            className="w-full justify-start h-11 text-left font-medium"
             onClick={() => onPageChange("dashboard")}
           >
             <Shield className="mr-2 h-4 w-4" />
@@ -78,7 +78,7 @@ export const NavigationMenu = ({
           </Button>
           <Button
             variant={currentPage === "activity-logs" ? "default" : "ghost"}
-            className="w-full justify-start"
+            className="w-full justify-start h-11 text-left font-medium"
             onClick={() => onPageChange("activity-logs")}
           >
             <Activity className="mr-2 h-4 w-4" />
@@ -86,9 +86,11 @@ export const NavigationMenu = ({
           </Button>
         </>
       )}
+      
+      <div className="pt-2 border-t border-gray-200 mt-4">
       <Button
-        variant={currentPage === "profile" ? "default" : "ghost"} // Changed from "profile-setup" to "profile"
-        className="w-full justify-start"
+        variant={currentPage === "profile" ? "default" : "ghost"}
+        className="w-full justify-start h-11 text-left font-medium"
         onClick={() => onPageChange("profile")} // Changed to "profile"
         >
         <User className="mr-2 h-4 w-4" />
@@ -96,12 +98,13 @@ export const NavigationMenu = ({
       </Button>
       <Button
         variant="ghost"
-        className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
+        className="w-full justify-start h-11 text-left font-medium text-red-600 hover:text-red-700 hover:bg-red-50"
         onClick={onLogout}
       >
         <LogOut className="mr-2 h-4 w-4" />
         Logout
       </Button>
+      </div>
     </nav>
   );
 };

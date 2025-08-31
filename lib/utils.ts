@@ -52,6 +52,7 @@ export const statePersistence = {
         registerForm: state.registerForm,
         profileForm: state.profileForm,
         vehicleForm: state.vehicleForm,
+        timestamp: Date.now() // Add timestamp for session validation
       };
       localStorage.setItem('appState', JSON.stringify(stateToSave));
     } catch (error) {
@@ -64,7 +65,16 @@ export const statePersistence = {
     try {
       const savedState = localStorage.getItem('appState');
       if (savedState) {
-        return JSON.parse(savedState);
+        const parsedState = JSON.parse(savedState);
+        
+        // Check if state is not too old (24 hours)
+        const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+        if (parsedState.timestamp && (Date.now() - parsedState.timestamp) < maxAge) {
+          return parsedState;
+        } else {
+          // State is too old, clear it
+          localStorage.removeItem('appState');
+        }
       }
     } catch (error) {
       console.error('Error loading state from localStorage:', error);

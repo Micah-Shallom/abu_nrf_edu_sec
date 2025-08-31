@@ -289,7 +289,14 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
         this.fetchVehicles();
         this.fetchActivities();
       } 
+      
+      // Set up proper browser navigation handling
       window.addEventListener('popstate', this.handleBrowserNavigation);
+      
+      // Update browser history state
+      if (window.history.state === null) {
+        window.history.replaceState({ page: this.state.currentPage }, '', '/');
+      }
     });
   }
 
@@ -325,22 +332,65 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
 
   private reconnectUserSession = async (token: string) => {
     try {
+      // Verify token is still valid by making a test request
+      const response = await fetch('https://surveilx-backend.onrender.com/api/v1/profile/', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        // Token is valid, restore session
+        const profileData = await response.json();
+        const userData = profileData.data;
+        
+        const appUser = {
+          id: userData.user_id,
+          name: userData.full_name || 'User',
+          email: userData.email || '',
+          role: 'User' as const
+        };
+        
+        this.setState({ 
+          currentUser: appUser,
+          currentPage: 'dashboard'
+        });
+        
+        this.fetchVehicles();
+        this.fetchActivities();
+      } else {
+        throw new Error('Token invalid');
+      }
+      
       this.connectWebSocket(token);
     } catch (error) {
       console.error('Failed to reconnect user session:', error);
       localStorage.removeItem('authToken');
       const { statePersistence } = await import('@/lib/utils');
       statePersistence.clearState();
+      this.setState({ 
+        currentUser: null,
+        currentPage: 'landing'
+      });
     }
   };
 
   private handleBrowserNavigation = (event: PopStateEvent) => {
-    // This prevents the default back behavior and uses our state
-    event.preventDefault();
+    // Handle browser navigation properly
+    const currentPath = window.location.pathname;
     
-    // You can optionally implement your own navigation history
-    // For now, we'll just maintain the current page from state
-    console.log('Browser navigation attempted, maintaining current state');
+    // If we're on the main app page, handle internal navigation
+    if (currentPath === '/' || currentPath === '') {
+      // Check if user is logged in
+      const token = localStorage.getItem('authToken');
+      if (token && this.state.currentUser) {
+        // User is logged in, navigate to dashboard
+        this.setState({ currentPage: 'dashboard' });
+      } else {
+        // User not logged in, go to landing
+        this.setState({ currentPage: 'landing' });
+      }
+    }
   };
 
 
@@ -533,6 +583,17 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
   handleLogout = () => {
     localStorage.removeItem('authToken');
     
+    // Disconnect WebSocket
+    if (this.connectionUnsubscribe) {
+      this.connectionUnsubscribe();
+      this.connectionUnsubscribe = undefined;
+    }
+    if (this.messageUnsubscribe) {
+      this.messageUnsubscribe();
+      this.messageUnsubscribe = undefined;
+    }
+    webSocketService.disconnect();
+    
     // Use dynamic import to avoid circular dependencies
     import('@/lib/utils').then(({ statePersistence }) => {
       statePersistence.clearState();
@@ -540,12 +601,19 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       this.setState({ 
         currentUser: null,
         currentPage: "landing",
+        vehicles: [],
+        activityLogs: [],
         profileForm: { 
           name: "",
           email: "",
           phone: "",
-        }
+        },
+        vehicleForm: { plateNumber: "", model: "", color: "", type: "" },
+        webSocketConnected: false
       });
+      
+      // Update browser history
+      window.history.pushState({ page: 'landing' }, '', '/');
     });
   }
 
@@ -577,6 +645,8 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
       currentPage: page,
       isMenuOpen: false 
     }, () => {
+      // Update browser history
+      window.history.pushState({ page }, '', '/');
       this.saveStateToStorage(); // Save state after page change
     });
   }
@@ -944,9 +1014,11 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
   renderLandingPage() {
     return (
       <LandingPage
-      onNavigateToRegister={() => this.setState({ currentPage: "register" })}
-      onNavigateToLogin={() => this.setState({ currentPage: "login" })}
-    />
+        onNavigateToRegister={() => this.handlePageChange("register")}
+        onNavigateToLogin={() => this.handlePageChange("login")}
+        hasActiveSession={!!this.state.currentUser}
+        onNavigateToDashboard={() => this.handlePageChange("dashboard")}
+      />
     )
   }
 
@@ -987,28 +1059,38 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
 
      return (
       <div className="min-h-screen bg-gray-50">
-        <header className="bg-white shadow-sm border-b">
+        <header className="bg-white shadow-lg border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center">
+                <button 
+                  className="flex items-center space-x-3 hover:opacity-80 transition-opacity mr-6"
+                  onClick={() => this.handlePageChange("dashboard")}
+                >
+                  <Car className="h-8 w-8 text-blue-600" />
+                  <span className="text-xl font-semibold text-gray-900">Vehicle Monitor</span>
+                </button>
                 {this.state.currentUser.role === "Security" ? (
-                  <Shield className="h-8 w-8 text-blue-600 mr-3" />
+                  <Shield className="h-6 w-6 text-blue-600 mr-2" />
                 ) : (
-                  <User className="h-8 w-8 text-blue-600 mr-3" />
+                  <User className="h-6 w-6 text-blue-600 mr-2" />
                 )}
-                <h1 className="text-xl font-semibold">My Profile</h1>
+                <h1 className="text-lg font-medium">Profile</h1>
               </div>
-              <Button 
-                variant="ghost" 
-                onClick={() => this.handlePageChange("dashboard")}
-              >
-                Back to Dashboard
-              </Button>
             </div>
           </div>
         </header>
 
-        <main className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-4 gap-8">
+            <aside className="lg:col-span-1">
+              <div className="bg-white rounded-xl shadow-sm p-6 sticky top-8">
+                <this.NavigationMenu />
+              </div>
+            </aside>
+            
+            <div className="lg:col-span-3">
+              <div className="bg-white rounded-xl shadow-sm p-8">
           <ProfileContainer
               currentUser={this.state.currentUser}
               initialData={{
@@ -1050,6 +1132,9 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
               }}
               loading={this.state.profileLoading}
             />
+              </div>
+            </div>
+          </div>
         </main>
       </div>
     );
@@ -1064,56 +1149,52 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
 
     return (
       <div className="min-h-screen bg-gray-50">
-        <header className="bg-white shadow-sm border-b">
+        <header className="bg-white shadow-lg border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center">
+                <button 
+                  className="flex items-center space-x-3 hover:opacity-80 transition-opacity mr-6"
+                  onClick={() => this.handlePageChange("dashboard")}
+                >
+                  <Car className="h-8 w-8 text-blue-600" />
+                  <span className="text-xl font-semibold text-gray-900">Vehicle Monitor</span>
+                </button>
                 {this.state.currentUser.role === "Security" ? (
-                  <Shield className="h-8 w-8 text-blue-600 mr-3" />
+                  <Car className="h-6 w-6 text-blue-600 mr-2" />
                 ) : (
-                  <User className="h-8 w-8 text-blue-600 mr-3" />
+                  <Car className="h-6 w-6 text-blue-600 mr-2" />
                 )}
-                <h1 className="text-xl font-semibold">My Profile</h1>
+                <h1 className="text-lg font-medium">My Vehicles</h1>
               </div>
-              <Button 
-                variant="ghost" 
-                onClick={() => this.handlePageChange("dashboard")}
-              >
-                Back to Dashboard
-              </Button>
             </div>
           </div>
         </header>
+        
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex gap-8">
-            <aside className="hidden lg:block w-64 flex-shrink-0">
-              <div className="bg-white rounded-lg shadow p-6">
+          <div className="grid lg:grid-cols-4 gap-8">
+            <aside className="lg:col-span-1">
+              <div className="bg-white rounded-xl shadow-sm p-6 sticky top-8">
                 <this.NavigationMenu />
               </div>
             </aside>
 
-            <main className="flex-1">
+            <main className="lg:col-span-3">
+              <div className="bg-white rounded-xl shadow-sm p-8">
                 {this.state.loading ? (
-                <div className="flex justify-center items-center h-64">
-                  <p>Loading vehicles...</p>
-                </div>
-              ) : (
-                <RegisteredVehicles
-                  vehicles={this.state.vehicles.filter(v => v.userId === this.state.currentUser?.id)}
-                  onEdit={this.handleEditVehicle}
-                  onDelete={this.deleteVehicle} // Now async
-                  onRegisterNew={() => this.setState({ 
-                    currentPage: "vehicle-registration",
-                    vehicleForm: {
-                      plateNumber: "",
-                      model: "",
-                      color: "",
-                      type: ""
-                    }
-                  })}
-                  loading={this.state.loading}
-                />
-              )}
+                  <div className="flex justify-center items-center h-64">
+                    <p>Loading vehicles...</p>
+                  </div>
+                ) : (
+                  <RegisteredVehicles
+                    vehicles={this.state.vehicles.filter(v => v.userId === this.state.currentUser?.id)}
+                    onEdit={this.handleEditVehicle}
+                    onDelete={this.deleteVehicle}
+                    onRegisterNew={() => this.handlePageChange("vehicle-registration")}
+                    loading={this.state.loading}
+                  />
+                )}
+              </div>
             </main>
           </div>
         </div>
@@ -1137,33 +1218,34 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
     return (
       <div className="min-h-screen bg-gray-50">
         {/* Consistent header with other pages */}
-        <header className="bg-white shadow-sm border-b">
+        <header className="bg-white shadow-lg border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center">
+                <button 
+                  className="flex items-center space-x-3 hover:opacity-80 transition-opacity mr-6"
+                  onClick={() => this.handlePageChange("dashboard")}
+                >
+                  <Car className="h-8 w-8 text-blue-600" />
+                  <span className="text-xl font-semibold text-gray-900">Vehicle Monitor</span>
+                </button>
                 {this.state.currentUser.role === "Security" ? (
-                  <Shield className="h-8 w-8 text-blue-600 mr-3" />
+                  <Shield className="h-6 w-6 text-blue-600 mr-2" />
                 ) : (
-                  <Activity className="h-8 w-8 text-blue-600 mr-3" />
+                  <Activity className="h-6 w-6 text-blue-600 mr-2" />
                 )}
-                <h1 className="text-xl font-semibold">
+                <h1 className="text-lg font-medium">
                   {this.state.currentUser.role === "Security" ? "Activity Monitor" : "Activity Logs"}
                 </h1>
               </div>
-              <Button 
-                variant="ghost" 
-                onClick={() => this.handlePageChange("dashboard")}
-              >
-                Back to Dashboard
-              </Button>
             </div>
           </div>
         </header>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex gap-8">
-            <aside className="hidden lg:block w-64 flex-shrink-0">
-              <div className="bg-white rounded-lg shadow p-6">
+          <div className="grid lg:grid-cols-4 gap-8">
+            <aside className="lg:col-span-1">
+              <div className="bg-white rounded-xl shadow-sm p-6 sticky top-8">
                 <NavigationMenu
                   currentPage={this.state.currentPage}
                   currentUser={this.state.currentUser}
@@ -1173,7 +1255,8 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
               </div>
             </aside>
 
-            <main className="flex-1">
+            <main className="lg:col-span-3">
+              <div className="bg-white rounded-xl shadow-sm p-8">
               {this.state.loading ? (
                 <div className="flex justify-center items-center h-64">
                   <p>Loading activities...</p>
@@ -1189,6 +1272,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
                   }}
                 />
               )}
+              </div>
             </main>
           </div>
         </div>
@@ -1258,7 +1342,7 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
 
     return (
       <div className="min-h-screen bg-gray-50">
-        <header className="bg-white shadow-sm border-b">
+        <header className="bg-white shadow-lg border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center">
@@ -1269,10 +1353,13 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
                     </Button>
                   </SheetTrigger>
                   <SheetContent side="left" className="w-64">
-                    <div className="flex items-center mb-6">
+                    <button 
+                      className="flex items-center mb-6 hover:opacity-80 transition-opacity"
+                      onClick={() => this.handlePageChange("dashboard")}
+                    >
                       <Car className="h-8 w-8 text-blue-600 mr-3" />
                       <h1 className="text-xl font-semibold">Vehicle Monitor</h1>
-                    </div>
+                    </button>
                     {this.state.currentUser && (
                       <NavigationMenu
                         currentPage={this.state.currentPage}
@@ -1283,10 +1370,22 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
                     )}
                   </SheetContent>
                 </Sheet>
-                <Car className="h-8 w-8 text-blue-600 mr-3" />
-                <h1 className="text-xl font-semibold">Vehicle Monitor</h1>
+                <button 
+                  className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
+                  onClick={() => this.handlePageChange("dashboard")}
+                >
+                  <Car className="h-8 w-8 text-blue-600" />
+                  <span className="text-xl font-semibold text-gray-900">Vehicle Monitor</span>
+                </button>
               </div>
               <div className="flex items-center space-x-4">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => this.handlePageChange("landing")}
+                  className="text-gray-600 hover:text-gray-900"
+                >
+                  Home
+                </Button>
                 <Badge variant="secondary">
                   {this.state.currentUser?.role === "Security" ? (
                     <Shield className="h-3 w-3 mr-1" />
@@ -1306,16 +1405,17 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
         </header>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex gap-8">
+          <div className="grid lg:grid-cols-4 gap-8">
             {/* Desktop Sidebar */}
-            <aside className="hidden lg:block w-64 flex-shrink-0">
-              <div className="bg-white rounded-lg shadow p-6">
+            <aside className="lg:col-span-1">
+              <div className="bg-white rounded-xl shadow-sm p-6 sticky top-8">
                 <this.NavigationMenu />
               </div>
             </aside>
 
             {/* Main Content */}
-          <main className="flex-1">
+            <main className="lg:col-span-3">
+              <div className="bg-white rounded-xl shadow-sm p-8">
             <DashboardMain
               userRole={this.state.currentUser?.role || "User"}
               userVehiclesCount={userVehicles.length}
@@ -1324,63 +1424,29 @@ export default class VehicleSecuritySystem extends Component<{}, VehicleSecurity
               recentActivities={recentActivities} // Pass the recent activities
               onNavigate={(page) => this.handlePageChange(page)}
             />
+              </div>
           </main>
           </div>
         </div>
-        {this.renderNotification()}
       </div>
     )
   }
 
   renderWebSocketStatus() {
     return (
-      <div className={`fixed top-4 right-4 px-3 py-1 rounded-full text-xs font-medium ${
-        this.state.webSocketConnected 
-          ? 'bg-green-100 text-green-800' 
-          : 'bg-red-100 text-red-800'
-      }`}>
-        {this.state.webSocketConnected ? '🟢 Connected' : '🔴 Disconnected'}
-      </div>
+      null // Removed WebSocket status display
     );
   }
 
   testWebSocketMessage = () => {
     const testMessage: WebSocketMessage = {
       type: 'exit_confirmation',
-      pending_id: 'test-pending-123',
-      token: 'test-token-456',
-      message: 'Vehicle ABC-123 is exiting the premises. Are you the driver?'
-    };
-    
-    this.handleExitConfirmation(testMessage);
-  }
-
-  // Add a test button in your render method for development
-  renderTestButton() {
-    if (process.env.NODE_ENV === 'development') {
-      return (
-        <button
-          onClick={this.testWebSocketMessage}
-          className="fixed top-20 right-4 bg-blue-500 text-white px-3 py-1 rounded text-sm"
-        >
-          Test WebSocket
-        </button>
-      );
-    }
-    return null;
-  }
-
-
-
-
   render() {
       const currentPage = this.renderCurrentPage();
   
   return (
       <>
         {currentPage}
-        {this.renderWebSocketStatus()}
-        {this.renderTestButton()}
         {this.state.showNotification && (
           <Notification
             message={this.state.notificationMessage}

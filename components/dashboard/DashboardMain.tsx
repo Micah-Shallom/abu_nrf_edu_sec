@@ -47,10 +47,10 @@ export const DashboardMain = ({
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">
+        <h2 className="text-3xl font-bold text-gray-900 mb-2">
           {userRole === "Security" ? "Security Dashboard" : "Dashboard"}
         </h2>
-        <p className="text-gray-600">
+        <p className="text-lg text-gray-600">
           {userRole === "Security" 
             ? "Monitor all vehicle activities" 
             : "Manage your registered vehicles and access"}
@@ -63,7 +63,7 @@ export const DashboardMain = ({
         {userRole === "User" && (
           <>
             <Card 
-              className="hover:shadow-md transition-shadow cursor-pointer"
+              className="hover:shadow-lg transition-all duration-300 cursor-pointer hover:-translate-y-1 border-0 shadow-md"
               onClick={() => onNavigate("registered-vehicles")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -79,7 +79,7 @@ export const DashboardMain = ({
             </Card>
 
             <Card
-              className="hover:shadow-md transition-shadow cursor-pointer"
+              className="hover:shadow-lg transition-all duration-300 cursor-pointer hover:-translate-y-1 border-0 shadow-md"
               onClick={() => onNavigate("registered-vehicles")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -95,7 +95,7 @@ export const DashboardMain = ({
             </Card>
 
             <Card
-              className="hover:shadow-md transition-shadow cursor-pointer"
+              className="hover:shadow-lg transition-all duration-300 cursor-pointer hover:-translate-y-1 border-0 shadow-md"
               onClick={() => onNavigate("activity-logs")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -116,7 +116,7 @@ export const DashboardMain = ({
         {userRole === "Security" && (
           <>
             <Card
-              className="hover:shadow-md transition-shadow cursor-pointer"
+              className="hover:shadow-lg transition-all duration-300 cursor-pointer hover:-translate-y-1 border-0 shadow-md"
               onClick={() => onNavigate("registered-vehicles")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -132,7 +132,7 @@ export const DashboardMain = ({
             </Card>
 
             <Card
-              className="hover:shadow-md transition-shadow cursor-pointer"
+              className="hover:shadow-lg transition-all duration-300 cursor-pointer hover:-translate-y-1 border-0 shadow-md"
               onClick={() => onNavigate("activity-logs")}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -147,7 +147,7 @@ export const DashboardMain = ({
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-0 shadow-md">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Station</CardTitle>
                 <Shield className="h-4 w-4 text-muted-foreground" />
@@ -165,33 +165,33 @@ export const DashboardMain = ({
         )}
 
         {/* Quick Actions Card (Common) */}
-        <Card className="md:col-span-2 lg:col-span-1">
+        <Card className="md:col-span-2 lg:col-span-1 border-0 shadow-md">
           <CardHeader>
-            <CardTitle className="text-lg">Quick Actions</CardTitle>
+            <CardTitle className="text-xl">Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2">
             <button 
               onClick={() => onNavigate("vehicle-registration")}
-              className="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100 transition-colors text-left"
+              className="flex items-center gap-3 p-4 rounded-lg hover:bg-blue-50 transition-colors text-left border border-gray-100 hover:border-blue-200"
             >
               <Plus className="h-5 w-5 text-blue-600" />
-              <span>Register New Vehicle</span>
+              <span className="font-medium">Register New Vehicle</span>
             </button>
             <button 
               onClick={() => onNavigate("registered-vehicles")}
-              className="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100 transition-colors text-left"
+              className="flex items-center gap-3 p-4 rounded-lg hover:bg-blue-50 transition-colors text-left border border-gray-100 hover:border-blue-200"
             >
               <Car className="h-5 w-5 text-blue-600" />
-              <span>View My Vehicles</span>
+              <span className="font-medium">View My Vehicles</span>
             </button>
           </CardContent>
         </Card>
       </div>
 
       {/* Recent Activity Section */}
-      <Card>
+      <Card className="border-0 shadow-md">
         <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
+          <CardTitle className="text-xl">Recent Activity</CardTitle>
           <CardDescription>
             {userRole === "Security" 
               ? "Latest vehicle movements across campus" 
@@ -202,7 +202,7 @@ export const DashboardMain = ({
           {recentActivities.length > 0 ? (
             <div className="space-y-3">
               {recentActivities.slice(0, 3).map((activity) => (
-                <div key={activity.id} className="flex items-center justify-between p-3 border rounded-lg">
+                <div key={activity.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
                   <div className="flex items-center space-x-3">
                     <div className={`p-2 rounded-full ${
                       activity.logType === 'Entry' ? 'bg-green-100' : 'bg-gray-100'
@@ -214,17 +214,17 @@ export const DashboardMain = ({
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{activity.vehicleName}</p>
-                      <p className="text-xs text-gray-500 truncate">{activity.vehiclePlate}</p>
+                      <p className="font-semibold truncate">{activity.vehicleName}</p>
+                      <p className="text-sm text-gray-500 truncate">{activity.vehiclePlate}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium">
+                    <p className="text-sm font-medium">
                       {formatDateTime(activity.logTime)}
                     </p>
                     <Badge 
                       variant={getLogTypeVariant(activity.logType)} 
-                      className="text-xs mt-1"
+                      className="text-xs mt-2"
                     >
                       {getLogTypeIcon(activity.logType)}
                       {activity.logType}
@@ -235,14 +235,16 @@ export const DashboardMain = ({
             </div>
           ) : (
             <div className="text-center py-8 text-gray-400">
-              <p>No recent activity found</p>
+              <Activity className="h-12 w-12 mx-auto mb-4 opacity-30" />
+              <p className="text-lg">No recent activity found</p>
+              <p className="text-sm">Vehicle activities will appear here once you start using the system</p>
             </div>
           )}
           
-          <div className="mt-4 text-center">
+          <div className="mt-6 text-center">
             <button 
               onClick={() => onNavigate("activity-logs")}
-              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              className="text-blue-600 hover:text-blue-800 font-medium hover:underline transition-colors"
             >
               View full activity logs
             </button>
