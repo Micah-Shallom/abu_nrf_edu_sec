@@ -1,7 +1,8 @@
 // /services/authService.ts
 import { User, RegisterData, LoginData, Profile } from '@/types/auth';
+import { env } from '../config/config';
 
-const API_BASE_URL = 'https://surveilx-backend.onrender.com/api/v1';
+const API_BASE_URL = env.API_BASE_URL;
 
 interface BackendUser {
   ID?: string;

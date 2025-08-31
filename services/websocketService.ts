@@ -1,3 +1,5 @@
+import { env } from '../config/config';
+
 // services/websocketService.ts
 export interface WebSocketMessage {
   type: 'exit_confirmation' | 'security_alert' | 'response';
@@ -17,7 +19,7 @@ class WebSocketService {
   private connectionHandlers: ((connected: boolean) => void)[] = [];
 
 
-  constructor(private baseUrl: string = 'ws://localhost:10000/ws') {}
+  constructor(private baseUrl: string = env.WS_URL) {}
 
   private notifyConnectionStatus() {
     this.connectionHandlers.forEach(handler => handler(this.isConnected));

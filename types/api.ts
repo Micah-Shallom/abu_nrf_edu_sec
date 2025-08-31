@@ -1,3 +1,5 @@
+import { env } from '../config/config';
+
 export interface ApiError {
   message: string;
   code?: number;
@@ -9,7 +11,7 @@ export interface ApiResponse<T> {
   error?: ApiError;
 }
 
-const API_BASE_URL = 'https://surveilx-backend.onrender.com/api/v1';
+const API_BASE_URL = env.API_BASE_URL;
 
 // /lib/api.ts
 export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
@@ -21,7 +23,7 @@ export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
       'Accept': 'application/json',
       ...options.headers
     },
-    credentials: 'include' // If using cookies
+    credentials: 'include' 
   });
 
   if (!response.ok) {
