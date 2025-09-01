@@ -90,3 +90,14 @@ export interface LogVehicleActivityInput {
   entry_point_id?: string | null;  // Add | null
   exit_point_id?: string | null;   // Add | null
 }
+
+export interface ActivityLog {
+  id: string;
+  plate_number: string;
+  visitor_type: 'registered' | 'guest';
+  is_entry: boolean;
+  vehicle_type?: string;
+  model?: string;
+  gate_name?: string;
+  timestamp: string;
+}
