@@ -10,7 +10,7 @@ interface ApiResponse<T> {
 export const api = {
   async post<T>(endpoint: string, body: any): Promise<ApiResponse<T>> {
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(`${env.API_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

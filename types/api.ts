@@ -24,7 +24,7 @@ export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
       'Accept': 'application/json',
       ...options.headers
     },
-    credentials: 'include' // If using cookies
+    credentials: 'include' 
   });
 
   if (!response.ok) {

@@ -4,6 +4,7 @@ import { env } from '../config/config';
 
 
 const API_BASE_URL = env.API_BASE_URL;
+const API_BASE_URL = env.API_BASE_URL;
 
 interface BackendUser {
   ID?: string;
