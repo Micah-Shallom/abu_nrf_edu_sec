@@ -1,13 +1,11 @@
+"use client"
+
 import type { Metadata } from 'next'
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import './globals.css'
-
-export const metadata: Metadata = {
-  title: 'ABUNRFEDUSEC',
-  description: 'Created with v0',
-  generator: 'v0.dev',
-}
+import { SessionProvider } from '@/contexts/SessionContext'
+import { Toaster } from "@/components/ui/toaster"
 
 export default function RootLayout({
   children,
@@ -25,7 +23,12 @@ html {
 }
         `}</style>
       </head>
-      <body>{children}</body>
+      <body>
+        <SessionProvider>
+          {children}
+          <Toaster />
+        </SessionProvider>
+      </body>
     </html>
   )
 }
