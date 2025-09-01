@@ -90,3 +90,7 @@ export interface LogVehicleActivityInput {
   entry_point_id?: string | null;  // Add | null
   exit_point_id?: string | null;   // Add | null
 }
+
+export interface ActivityLog {
+
+}
