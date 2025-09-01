@@ -1,4 +1,6 @@
-const API_BASE_URL = 'https://surveilx-backend.onrender.com/api/v1';
+import { env } from '../config/config';
+
+const API_BASE_URL = env.API_BASE_URL;
 
 interface ApiResponse<T> {
   data?: T;

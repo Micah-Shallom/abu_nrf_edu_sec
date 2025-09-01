@@ -1,5 +1,8 @@
+import { env } from '../config/config';
+
+
 // /lib/apiClient.ts
-const API_BASE_URL = 'https://surveilx-backend.onrender.com/api/v1';
+const API_BASE_URL = env.API_BASE_URL;
 
 export const apiClient = {
   async get(url: string) {
