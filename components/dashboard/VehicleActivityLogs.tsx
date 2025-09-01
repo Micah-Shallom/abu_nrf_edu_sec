@@ -49,12 +49,12 @@ export const VehicleActivityLogs = ({
               logs.map((log) => (
                 <TableRow key={log.id}>
                   <TableCell>
-                    <Badge variant={log.logType === 'Entry' ? 'default' : 'secondary'}>
-                      {log.logType === 'Entry' ? <LogIn className="h-3 w-3 mr-1" /> : <LogOut className="h-3 w-3 mr-1" />}
-                      {log.logType}
+                    <Badge variant={log.is_entry ? 'default' : 'secondary'}>
+                      {log.is_entry ? <LogIn className="h-3 w-3 mr-1" /> : <LogOut className="h-3 w-3 mr-1" />}
+                      {log.is_entry ? 'Entry' : 'Exit'}
                     </Badge>
                   </TableCell>
-                  <TableCell>{formatDateTime(log.logTime)}</TableCell>
+                  <TableCell>{formatDateTime(log.timestamp)}</TableCell>
                 </TableRow>
               ))
             ) : (
